@@ -1,20 +1,22 @@
-import { Loader } from "@googlemaps/js-api-loader";
+import { setOptions, importLibrary } from "@googlemaps/js-api-loader";
 
-let loaderPromise: Promise<typeof google> | null = null;
+let configured = false;
 
-export function loadGoogleMaps(): Promise<typeof google> {
-  if (!loaderPromise) {
-    const key = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY as string;
-    const channel = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_TRACKING_ID as string | undefined;
-    const loader = new Loader({
-      apiKey: key,
-      version: "weekly",
-      libraries: ["maps", "marker"],
-      ...(channel ? { channel } : {}),
-    });
-    loaderPromise = loader.load();
-  }
-  return loaderPromise;
+function configure() {
+  if (configured) return;
+  const key = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY as string;
+  const channel = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_TRACKING_ID as string | undefined;
+  setOptions({ key, v: "weekly", ...(channel ? { channel } : {}) });
+  configured = true;
+}
+
+export async function loadMaps() {
+  configure();
+  const [maps, marker] = await Promise.all([
+    importLibrary("maps"),
+    importLibrary("marker"),
+  ]);
+  return { maps, marker, g: google };
 }
 
 // Haversine distance in meters
