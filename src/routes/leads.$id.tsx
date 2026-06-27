@@ -1,0 +1,256 @@
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { AppShell } from "@/components/AppShell";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { STATUSES, StatusBadgePlaceholder } from "./leads-helpers";
+import { ArrowLeft, MapPin, MessageCircle, Save, Trash2, Camera, Loader2 } from "lucide-react";
+import { buildWhatsAppLink } from "@/lib/whatsapp";
+import { getSignedUrls, uploadPhoto, type PhotoMeta } from "@/lib/photos";
+import { toast } from "sonner";
+
+export const Route = createFileRoute("/leads/$id")({
+  head: () => ({
+    meta: [{ title: "Lead — VertX Field" }, { name: "description", content: "Lead detail with WhatsApp follow-up." }],
+  }),
+  component: LeadDetail,
+});
+
+type Lead = {
+  id: string;
+  name: string | null;
+  phone: string | null;
+  required_kw: number | null;
+  notes: string | null;
+  lat: number;
+  lng: number;
+  status: string;
+  type: string;
+  visited: boolean;
+  photos: PhotoMeta[];
+  created_at: string;
+};
+
+type Settings = { sender_name: string; company_name: string; whatsapp_template: string };
+
+function LeadDetail() {
+  const { id } = Route.useParams();
+  const navigate = useNavigate();
+  const [lead, setLead] = useState<Lead | null>(null);
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const [{ data: l }, { data: s }] = await Promise.all([
+        supabase.from("leads").select("*").eq("id", id).maybeSingle(),
+        supabase.from("settings").select("sender_name,company_name,whatsapp_template").maybeSingle(),
+      ]);
+      if (l) {
+        const lead = l as Lead;
+        setLead(lead);
+        const paths = (lead.photos || []).map((p) => p.path);
+        if (paths.length) setSignedUrls(await getSignedUrls(paths));
+      }
+      setSettings(
+        (s as Settings) ?? {
+          sender_name: "Aureon",
+          company_name: "VertX Energies",
+          whatsapp_template: "Hi {name}, this is {sender} from {company}. I am following up on our chat about the {kw}kW solar system for your site...",
+        }
+      );
+    })();
+  }, [id]);
+
+  const waLink = useMemo(() => {
+    if (!lead?.phone || !settings) return null;
+    return buildWhatsAppLink({
+      phone: lead.phone,
+      name: lead.name,
+      kw: lead.required_kw,
+      template: settings.whatsapp_template,
+      sender: settings.sender_name,
+      company: settings.company_name,
+    });
+  }, [lead, settings]);
+
+  async function update<K extends keyof Lead>(key: K, value: Lead[K]) {
+    if (!lead) return;
+    setLead({ ...lead, [key]: value });
+  }
+  async function save() {
+    if (!lead) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from("leads")
+      .update({
+        name: lead.name,
+        phone: lead.phone,
+        required_kw: lead.required_kw,
+        notes: lead.notes,
+        status: lead.status,
+        visited: lead.visited,
+        photos: lead.photos,
+      })
+      .eq("id", lead.id);
+    setSaving(false);
+    if (error) toast.error(error.message);
+    else toast.success("Saved");
+  }
+  async function remove() {
+    if (!lead) return;
+    if (!confirm("Delete this lead?")) return;
+    await supabase.from("leads").delete().eq("id", lead.id);
+    toast.success("Deleted");
+    navigate({ to: "/leads" });
+  }
+  async function addPhotos(files: FileList | null) {
+    if (!files?.length || !lead) return;
+    setUploading(true);
+    try {
+      const added: PhotoMeta[] = [];
+      for (const f of Array.from(files)) added.push(await uploadPhoto(f, { lat: lead.lat, lng: lead.lng }));
+      const next = [...(lead.photos || []), ...added];
+      setLead({ ...lead, photos: next });
+      const newSigned = await getSignedUrls(added.map((a) => a.path));
+      setSignedUrls((s) => ({ ...s, ...newSigned }));
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  if (!lead) {
+    return (
+      <AppShell>
+        <div className="flex h-40 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+      </AppShell>
+    );
+  }
+
+  const isPotential = lead.type === "potential";
+
+  return (
+    <AppShell>
+      <header className="mb-4 flex items-center gap-2">
+        <Link to="/leads" className="rounded-full p-1.5 hover:bg-muted" aria-label="Back">
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+        <div className="flex-1">
+          <h1 className="text-xl font-bold leading-tight">{lead.name || (isPotential ? "Potential house" : "Lead")}</h1>
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <MapPin className="h-3 w-3" />
+            {lead.lat.toFixed(5)}, {lead.lng.toFixed(5)}
+          </p>
+        </div>
+        <StatusBadgePlaceholder status={lead.status} type={lead.type} />
+      </header>
+
+      {waLink ? (
+        <a
+          href={waLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mb-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] text-sm font-semibold text-white shadow active:opacity-90"
+        >
+          <MessageCircle className="h-5 w-5" /> Contact on WhatsApp
+        </a>
+      ) : (
+        <div className="mb-4 rounded-xl border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
+          Add a phone number to enable WhatsApp follow-up.
+        </div>
+      )}
+
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Name</Label>
+            <Input value={lead.name ?? ""} maxLength={100} onChange={(e) => update("name", e.target.value)} />
+          </div>
+          <div>
+            <Label>Phone</Label>
+            <Input value={lead.phone ?? ""} maxLength={20} onChange={(e) => update("phone", e.target.value)} inputMode="tel" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Required kW</Label>
+            <Input
+              type="number"
+              inputMode="decimal"
+              value={lead.required_kw ?? ""}
+              onChange={(e) => update("required_kw", e.target.value === "" ? null : Number(e.target.value))}
+            />
+          </div>
+          <div>
+            <Label>Status</Label>
+            <Select value={lead.status} onValueChange={(v) => update("status", v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {STATUSES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div>
+          <Label>Notes</Label>
+          <Textarea value={lead.notes ?? ""} maxLength={1000} rows={3} onChange={(e) => update("notes", e.target.value)} />
+        </div>
+
+        <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+          <Label htmlFor="visited">Visited</Label>
+          <Switch id="visited" checked={lead.visited} onCheckedChange={(v) => update("visited", v)} />
+        </div>
+
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <Label>Photos</Label>
+            <label className="flex cursor-pointer items-center gap-1 rounded-md border border-border px-2 py-1 text-xs">
+              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />} Add
+              <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(e) => addPhotos(e.target.files)} />
+            </label>
+          </div>
+          {(lead.photos?.length ?? 0) === 0 ? (
+            <p className="rounded-md border border-dashed border-border p-3 text-center text-xs text-muted-foreground">No photos yet.</p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {lead.photos.map((p) => (
+                <a key={p.path} href={signedUrls[p.path]} target="_blank" rel="noreferrer" className="block">
+                  <div className="aspect-square overflow-hidden rounded-md border bg-muted">
+                    {signedUrls[p.path] ? (
+                      <img src={signedUrls[p.path]} alt="lead" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">…</div>
+                    )}
+                  </div>
+                  {p.lat != null && (
+                    <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{p.lat.toFixed(4)},{p.lng?.toFixed(4)}</p>
+                  )}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2 pt-2">
+          <Button variant="outline" className="flex-1" onClick={remove}>
+            <Trash2 className="mr-2 h-4 w-4" /> Delete
+          </Button>
+          <Button className="flex-1" onClick={save} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="mr-2 h-4 w-4" /> Save</>}
+          </Button>
+        </div>
+      </div>
+    </AppShell>
+  );
+}
