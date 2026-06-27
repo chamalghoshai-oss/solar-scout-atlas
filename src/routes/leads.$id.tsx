@@ -54,7 +54,7 @@ function LeadDetail() {
         supabase.from("settings").select("sender_name,company_name,whatsapp_template").maybeSingle(),
       ]);
       if (l) {
-        const lead = l as Lead;
+        const lead = l as unknown as Lead;
         setLead(lead);
         const paths = (lead.photos || []).map((p) => p.path);
         if (paths.length) setSignedUrls(await getSignedUrls(paths));
