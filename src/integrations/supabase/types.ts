@@ -14,7 +14,146 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      leads: {
+        Row: {
+          created_at: string
+          device_id: string
+          id: string
+          lat: number
+          lng: number
+          name: string | null
+          notes: string | null
+          phone: string | null
+          photos: Json
+          required_kw: number | null
+          status: string
+          type: string
+          updated_at: string
+          visited: boolean
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          id?: string
+          lat: number
+          lng: number
+          name?: string | null
+          notes?: string | null
+          phone?: string | null
+          photos?: Json
+          required_kw?: number | null
+          status?: string
+          type?: string
+          updated_at?: string
+          visited?: boolean
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          id?: string
+          lat?: number
+          lng?: number
+          name?: string | null
+          notes?: string | null
+          phone?: string | null
+          photos?: Json
+          required_kw?: number | null
+          status?: string
+          type?: string
+          updated_at?: string
+          visited?: boolean
+        }
+        Relationships: []
+      }
+      run_points: {
+        Row: {
+          accuracy: number | null
+          device_id: string
+          id: number
+          lat: number
+          lng: number
+          run_id: string
+          ts: string
+        }
+        Insert: {
+          accuracy?: number | null
+          device_id: string
+          id?: number
+          lat: number
+          lng: number
+          run_id: string
+          ts?: string
+        }
+        Update: {
+          accuracy?: number | null
+          device_id?: string
+          id?: number
+          lat?: number
+          lng?: number
+          run_id?: string
+          ts?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "run_points_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      runs: {
+        Row: {
+          created_at: string
+          device_id: string
+          distance_m: number | null
+          ended_at: string | null
+          id: string
+          started_at: string
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          distance_m?: number | null
+          ended_at?: string | null
+          id?: string
+          started_at?: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          distance_m?: number | null
+          ended_at?: string | null
+          id?: string
+          started_at?: string
+        }
+        Relationships: []
+      }
+      settings: {
+        Row: {
+          company_name: string
+          device_id: string
+          sender_name: string
+          updated_at: string
+          whatsapp_template: string
+        }
+        Insert: {
+          company_name?: string
+          device_id: string
+          sender_name?: string
+          updated_at?: string
+          whatsapp_template?: string
+        }
+        Update: {
+          company_name?: string
+          device_id?: string
+          sender_name?: string
+          updated_at?: string
+          whatsapp_template?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
