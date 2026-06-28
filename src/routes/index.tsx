@@ -77,6 +77,13 @@ function LiveRun() {
           strokeWeight: 5,
           map,
         });
+        rawTrailRef.current = new g.maps.Polyline({
+          path: [],
+          strokeColor: "#9ca3af",
+          strokeOpacity: 0.6,
+          strokeWeight: 2,
+          map,
+        });
         // map clicks → quick lead
         map.addListener("click", (e: google.maps.MapMouseEvent) => {
           if (longPressFired.current) {
