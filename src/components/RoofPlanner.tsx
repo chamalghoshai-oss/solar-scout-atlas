@@ -75,6 +75,7 @@ export function RoofPlanner({
   const editListenersRef = useRef<google.maps.MapsEventListener[]>([]);
   const resizeObsRef = useRef<ResizeObserver | null>(null);
 
+  const [mapHost, setMapHost] = useState<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("idle");
@@ -90,14 +91,10 @@ export function RoofPlanner({
 
   // Init map.
   useEffect(() => {
-    if (!open) return;
+    if (!open || !mapHost) return;
     let cancelled = false;
     (async () => {
       setMapError(null);
-      for (let i = 0; i < 10 && !mapEl.current && !cancelled; i += 1) {
-        await new Promise((resolve) => requestAnimationFrame(resolve));
-      }
-      if (cancelled || !mapEl.current) return;
       let maps: typeof google.maps;
       try {
         ({ maps } = await loadDrawing());
@@ -105,8 +102,8 @@ export function RoofPlanner({
         if (!cancelled) setMapError(err instanceof Error ? err.message : "Could not load satellite map");
         return;
       }
-      if (cancelled || !mapEl.current) return;
-      const map = new maps.Map(mapEl.current, {
+      if (cancelled) return;
+      const map = new maps.Map(mapHost, {
         center,
         zoom: 20,
         mapTypeId: "satellite",
@@ -140,9 +137,9 @@ export function RoofPlanner({
         kickResize();
         setTimeout(kickResize, 250);
       });
-      if (mapEl.current && "ResizeObserver" in window) {
+      if ("ResizeObserver" in window) {
         const ro = new ResizeObserver(() => kickResize());
-        ro.observe(mapEl.current);
+        ro.observe(mapHost);
         resizeObsRef.current = ro;
       }
 
@@ -178,7 +175,7 @@ export function RoofPlanner({
       cleanup();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, mapHost]);
 
   function cleanup() {
     resizeObsRef.current?.disconnect();
@@ -469,7 +466,10 @@ export function RoofPlanner({
 
         <div className="relative flex-1 overflow-hidden">
           <div
-            ref={mapEl}
+            ref={(el) => {
+              mapEl.current = el;
+              setMapHost(el);
+            }}
             className="absolute inset-0"
             onPointerDownCapture={handleMapPointerDown}
             onPointerUpCapture={handleMapPointerUp}
