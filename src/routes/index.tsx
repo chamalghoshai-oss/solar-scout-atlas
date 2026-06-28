@@ -7,6 +7,7 @@ import { Loader2, Play, Square, Crosshair, Plus, Sun } from "lucide-react";
 import { loadMaps, distM } from "@/lib/gmaps";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
+import { snapToRoads } from "@/lib/roads.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/")({
