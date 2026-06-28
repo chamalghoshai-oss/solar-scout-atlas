@@ -70,6 +70,7 @@ export function RoofPlanner({
   const draftDotsRef = useRef<google.maps.Marker[]>([]);
   const mapClickListenerRef = useRef<google.maps.MapsEventListener | null>(null);
   const editListenersRef = useRef<google.maps.MapsEventListener[]>([]);
+  const resizeObsRef = useRef<ResizeObserver | null>(null);
 
   const [ready, setReady] = useState(false);
   const [mode, setMode] = useState<Mode>("idle");
