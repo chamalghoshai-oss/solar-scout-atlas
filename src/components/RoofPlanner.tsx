@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Pencil, Ban, Trash2, RefreshCw, Save, Compass, Check, X } from "lucide-react";
+import { Loader2, Pencil, Ban, Trash2, RefreshCw, Save, Compass, Check, X, ChevronDown, ChevronUp } from "lucide-react";
 import { loadDrawing } from "@/lib/gmaps";
 import {
   DEFAULT_PANEL,
@@ -82,6 +82,7 @@ export function RoofPlanner({
   const [disabled, setDisabled] = useState<Set<string>>(new Set(initial?.disabled ?? []));
   const [panels, setPanels] = useState<PanelRect[]>(initial?.panels ?? []);
   const [autoFit, setAutoFit] = useState(true);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
 
   // Init map.
   useEffect(() => {
@@ -453,15 +454,31 @@ export function RoofPlanner({
             </div>
           )}
 
-          {/* Bottom controls + stats */}
-          <div className="absolute inset-x-0 bottom-0 max-h-[58dvh] overflow-y-auto rounded-t-2xl border-t bg-background/95 p-3 shadow-2xl backdrop-blur">
-            <div className="mb-3 grid grid-cols-3 gap-2 text-center">
-              <Stat label="Panels" value={`${activeCount}/${panels.length}`} />
-              <Stat label="System" value={`${kw.toFixed(2)} kW`} accent />
-              <Stat label="Roof" value={`${roofAreaM2.toFixed(0)} m²`} />
-            </div>
+          {/* Bottom controls + stats — collapsible for fullscreen map */}
+          <div
+            className={`absolute inset-x-0 bottom-0 rounded-t-2xl border-t bg-background/95 shadow-2xl backdrop-blur transition-[max-height] duration-200 ${
+              panelCollapsed ? "max-h-[64px] overflow-hidden" : "max-h-[58dvh] overflow-y-auto"
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => setPanelCollapsed((v) => !v)}
+              className="flex w-full items-center justify-between gap-2 px-3 py-2 text-xs"
+              aria-label={panelCollapsed ? "Expand controls" : "Collapse controls for fullscreen map"}
+            >
+              <span className="flex items-center gap-2 font-medium">
+                <span className="rounded bg-primary/10 px-1.5 py-0.5 text-primary">{kw.toFixed(2)} kW</span>
+                <span className="text-muted-foreground">{activeCount}/{panels.length} panels · {roofAreaM2.toFixed(0)} m²</span>
+              </span>
+              {panelCollapsed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
 
-            <div className="space-y-3">
+            <div className={`space-y-3 px-3 pb-3 ${panelCollapsed ? "hidden" : ""}`}>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <Stat label="Panels" value={`${activeCount}/${panels.length}`} />
+                <Stat label="System" value={`${kw.toFixed(2)} kW`} accent />
+                <Stat label="Roof" value={`${roofAreaM2.toFixed(0)} m²`} />
+              </div>
               <div>
                 <div className="mb-1 flex items-center justify-between text-xs">
                   <Label className="flex items-center gap-1"><Compass className="h-3.5 w-3.5" /> Azimuth (panels face)</Label>
