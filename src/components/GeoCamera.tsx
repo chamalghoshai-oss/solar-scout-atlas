@@ -5,6 +5,7 @@ import { Camera, Loader2, RotateCcw, Check, X, MapPin } from "lucide-react";
 import { uploadPhotoBlob } from "@/lib/photos";
 import type { PhotoMeta } from "@/lib/photos";
 import { toast } from "sonner";
+import { reverseGeocode } from "@/lib/geocode.functions";
 
 type Fix = {
   lat: number;
@@ -117,16 +118,8 @@ export function GeoCamera({
     let cancelled = false;
     const t = window.setTimeout(async () => {
       try {
-        const u = `https://connector-gateway.lovable.dev/google_maps/maps/api/geocode/json?latlng=${fix.lat},${fix.lng}`;
-        const r = await fetch(u, {
-          headers: {
-            Authorization: `Bearer ${import.meta.env.VITE_LOVABLE_API_KEY ?? ""}`,
-            "X-Connection-Api-Key": import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_API_KEY ?? "",
-          },
-        });
-        if (!r.ok) return;
-        const j = await r.json();
-        if (!cancelled && j?.results?.[0]?.formatted_address) setAddress(j.results[0].formatted_address);
+        const res = await reverseGeocode({ data: { lat: fix.lat, lng: fix.lng } });
+        if (!cancelled && res?.address) setAddress(res.address);
       } catch {
         /* ignore */
       }
