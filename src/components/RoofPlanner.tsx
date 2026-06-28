@@ -70,6 +70,7 @@ export function RoofPlanner({
   const draftDotsRef = useRef<google.maps.Marker[]>([]);
   const mapClickListenerRef = useRef<google.maps.MapsEventListener | null>(null);
   const editListenersRef = useRef<google.maps.MapsEventListener[]>([]);
+  const resizeObsRef = useRef<ResizeObserver | null>(null);
 
   const [ready, setReady] = useState(false);
   const [mode, setMode] = useState<Mode>("idle");
@@ -102,6 +103,23 @@ export function RoofPlanner({
         clickableIcons: false,
       });
       mapRef.current = map;
+
+      // The dialog can mount with 0 size for a frame; trigger resize so
+      // Google Maps re-measures and actually paints satellite tiles.
+      const kickResize = () => {
+        if (!mapRef.current) return;
+        google.maps.event.trigger(mapRef.current, "resize");
+        mapRef.current.setCenter(center);
+      };
+      requestAnimationFrame(() => {
+        kickResize();
+        setTimeout(kickResize, 250);
+      });
+      if (mapEl.current && "ResizeObserver" in window) {
+        const ro = new ResizeObserver(() => kickResize());
+        ro.observe(mapEl.current);
+        resizeObsRef.current = ro;
+      }
 
       mapClickListenerRef.current = map.addListener("click", (e: google.maps.MapMouseEvent) => {
         const m = modeRef.current;
@@ -137,6 +155,8 @@ export function RoofPlanner({
   }, [open]);
 
   function cleanup() {
+    resizeObsRef.current?.disconnect();
+    resizeObsRef.current = null;
     mapClickListenerRef.current?.remove();
     mapClickListenerRef.current = null;
     editListenersRef.current.forEach((l) => l.remove());
