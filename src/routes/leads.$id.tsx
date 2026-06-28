@@ -13,7 +13,7 @@ import { ArrowLeft, MapPin, MessageCircle, Save, Trash2, Camera, Loader2, SunMed
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { getSignedUrls, uploadPhoto, type PhotoMeta } from "@/lib/photos";
 import { toast } from "sonner";
-import { RoofPlanner, type RoofPlan } from "@/components/RoofPlanner";
+import { type RoofPlan } from "@/components/RoofPlanner";
 import { GeoCamera } from "@/components/GeoCamera";
 
 export const Route = createFileRoute("/leads/$id")({
@@ -49,7 +49,6 @@ function LeadDetail() {
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [plannerOpen, setPlannerOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
 
   useEffect(() => {
@@ -144,18 +143,6 @@ function LeadDetail() {
     await supabase.from("leads").update({ photos: next }).eq("id", lead.id);
   }
 
-  async function onRoofSaved(plan: RoofPlan) {
-    if (!lead) return;
-    const kwFromPlan = (plan.panels.length - plan.disabled.length) * plan.spec.watt / 1000;
-    const nextKw = lead.required_kw ?? Math.round(kwFromPlan * 100) / 100;
-    const next = { ...lead, roof_plan: plan, required_kw: nextKw };
-    setLead(next);
-    await supabase
-      .from("leads")
-      .update({ roof_plan: plan, required_kw: nextKw })
-      .eq("id", lead.id);
-    toast.success("Roof plan saved");
-  }
 
   if (!lead) {
     return (
@@ -288,7 +275,12 @@ function LeadDetail() {
         <div>
           <div className="mb-2 flex items-center justify-between">
             <Label className="flex items-center gap-1"><SunMedium className="h-3.5 w-3.5 text-primary" /> Roof & solar plan</Label>
-            <Button size="sm" variant="default" className="h-7 px-2 text-xs" onClick={() => setPlannerOpen(true)}>
+            <Button
+              size="sm"
+              variant="default"
+              className="h-7 px-2 text-xs"
+              onClick={() => navigate({ to: "/leads/$id/roof", params: { id: lead.id } })}
+            >
               {planSummary ? "Edit plan" : "Plan roof"}
             </Button>
           </div>
@@ -317,13 +309,6 @@ function LeadDetail() {
         </div>
       </div>
 
-      <RoofPlanner
-        open={plannerOpen}
-        onOpenChange={setPlannerOpen}
-        center={{ lat: lead.lat, lng: lead.lng }}
-        initial={lead.roof_plan}
-        onSave={onRoofSaved}
-      />
       <GeoCamera
         open={cameraOpen}
         onOpenChange={setCameraOpen}
