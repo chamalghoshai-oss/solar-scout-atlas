@@ -103,7 +103,6 @@ function LiveRun() {
         div.addEventListener("mouseleave", cancel_lp);
 
         setReady(true);
-        recenter(true);
         loadExistingLeads(map);
       } catch (e) {
         console.error(e);
@@ -132,20 +131,39 @@ function LiveRun() {
     }
   }
 
-  function recenter(silent = false) {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        mapRef.current?.panTo(c);
-        mapRef.current?.setZoom(17);
-        showMe(c);
-      },
-      (err) => {
-        if (!silent) toast.error(err.message || "Location unavailable");
-      },
-      { enableHighAccuracy: true, timeout: 8000 }
-    );
+  function locationMessage(err: GeolocationPositionError) {
+    if (err.code === err.PERMISSION_DENIED) {
+      return "Location is blocked. Allow location for this site, then tap locate again.";
+    }
+    if (err.code === err.POSITION_UNAVAILABLE) return "Location unavailable. Move outdoors or use Add lead at center.";
+    if (err.code === err.TIMEOUT) return "Location timed out. Try again or use Add lead at center.";
+    return err.message || "Location unavailable";
+  }
+
+  function getCurrentPosition(): Promise<GeolocationPosition> {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("Location is not supported on this device"));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        maximumAge: 5000,
+        timeout: 12000,
+      });
+    });
+  }
+
+  async function recenter() {
+    try {
+      const pos = await getCurrentPosition();
+      const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      mapRef.current?.panTo(c);
+      mapRef.current?.setZoom(17);
+      showMe(c);
+    } catch (err) {
+      toast.error(err instanceof GeolocationPositionError ? locationMessage(err) : err instanceof Error ? err.message : "Location unavailable");
+    }
   }
 
   async function showMe(c: google.maps.LatLngLiteral) {
@@ -170,8 +188,11 @@ function LiveRun() {
   }
 
   async function startRun() {
-    if (!navigator.geolocation) {
-      toast.error("Geolocation not supported");
+    let firstPos: GeolocationPosition;
+    try {
+      firstPos = await getCurrentPosition();
+    } catch (err) {
+      toast.error(err instanceof GeolocationPositionError ? locationMessage(err) : err instanceof Error ? err.message : "Location unavailable");
       return;
     }
     const device = getDeviceId();
@@ -188,9 +209,10 @@ function LiveRun() {
     setDistance(0);
     setRunning(true);
     toast.success("Run started");
+    onPosition(firstPos);
     watchIdRef.current = navigator.geolocation.watchPosition(
       onPosition,
-      (err) => toast.error(err.message),
+      (err) => toast.error(locationMessage(err)),
       { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
     );
   }
@@ -266,7 +288,7 @@ function LiveRun() {
 
       {/* recenter */}
       <button
-        onClick={() => recenter(false)}
+        onClick={() => recenter()}
         className="absolute right-4 top-20 z-10 rounded-full border border-border bg-background/95 p-2.5 shadow"
         aria-label="Recenter"
       >
