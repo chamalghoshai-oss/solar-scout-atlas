@@ -20,7 +20,7 @@ export function buildWhatsAppLink(opts: {
   const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
   const isAndroid = /Android/i.test(ua);
   if (isAndroid) {
-    return `intent://send/?phone=${cleaned}&text=${text}#Intent;scheme=smsto;package=com.whatsapp.w4b;S.browser_fallback_url=${encodeURIComponent(fallback)};end`;
+    return `intent://send?phone=${cleaned}&text=${text}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=${encodeURIComponent(fallback)};end`;
   }
   // iOS / desktop: wa.me opens whichever WhatsApp app is installed.
   return fallback;
