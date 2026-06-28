@@ -90,10 +90,14 @@ export function RoofPlanner({
 
   // Init map.
   useEffect(() => {
-    if (!open || !mapEl.current) return;
+    if (!open) return;
     let cancelled = false;
     (async () => {
       setMapError(null);
+      for (let i = 0; i < 10 && !mapEl.current && !cancelled; i += 1) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+      if (cancelled || !mapEl.current) return;
       let maps: typeof google.maps;
       try {
         ({ maps } = await loadDrawing());
