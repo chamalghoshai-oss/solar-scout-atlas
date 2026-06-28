@@ -22,12 +22,11 @@ export async function loadMaps() {
 
 export async function loadDrawing() {
   configure();
-  const [maps, drawing, geometry] = await Promise.all([
+  const [maps, geometry] = await Promise.all([
     importLibrary("maps"),
-    importLibrary("drawing"),
     importLibrary("geometry"),
   ]);
-  return { maps, drawing, geometry, g: google };
+  return { maps, geometry, g: google };
 }
 
 // Haversine distance in meters
