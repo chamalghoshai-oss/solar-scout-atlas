@@ -26,6 +26,11 @@ function LiveRun() {
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const breadcrumbRef = useRef<google.maps.Polyline | null>(null);
+  const rawTrailRef = useRef<google.maps.Polyline | null>(null);
+  const rawPointsRef = useRef<Array<{ lat: number; lng: number }>>([]);
+  const snappedPointsRef = useRef<Array<{ lat: number; lng: number }>>([]);
+  const snapTimerRef = useRef<number | null>(null);
+  const snapInFlightRef = useRef(false);
   const meMarkerRef = useRef<google.maps.Marker | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const runIdRef = useRef<string | null>(null);
