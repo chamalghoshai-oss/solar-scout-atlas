@@ -264,6 +264,10 @@ function LiveRun() {
   }
 
   async function stopRun() {
+    if (snapTimerRef.current) window.clearTimeout(snapTimerRef.current);
+    snapTimerRef.current = null;
+    // Final pass so the saved trail is road-aligned.
+    await runSnap();
     if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
     watchIdRef.current = null;
     const rid = runIdRef.current;
@@ -273,6 +277,35 @@ function LiveRun() {
     runIdRef.current = null;
     setRunning(false);
     toast.success(`Run ended · ${(distanceRef.current / 1000).toFixed(2)} km`);
+  }
+
+  function scheduleSnap() {
+    if (snapTimerRef.current) window.clearTimeout(snapTimerRef.current);
+    snapTimerRef.current = window.setTimeout(() => {
+      void runSnap();
+    }, 1500);
+  }
+
+  async function runSnap() {
+    if (snapInFlightRef.current) {
+      scheduleSnap();
+      return;
+    }
+    const raw = rawPointsRef.current;
+    if (raw.length < 2) return;
+    const tail = raw.slice(-100);
+    snapInFlightRef.current = true;
+    try {
+      const { snapped, error } = await snapToRoads({ data: { points: tail, interpolate: true } });
+      if (error || snapped.length === 0) return;
+      const olderCount = Math.max(0, raw.length - tail.length);
+      const kept = snappedPointsRef.current.slice(0, olderCount);
+      const next = [...kept, ...snapped.map((s) => ({ lat: s.lat, lng: s.lng }))];
+      snappedPointsRef.current = next;
+      breadcrumbRef.current?.setPath(next.map((p) => new google.maps.LatLng(p.lat, p.lng)));
+    } finally {
+      snapInFlightRef.current = false;
+    }
   }
 
   function addAtCenter() {
