@@ -246,8 +246,11 @@ function LiveRun() {
       setDistance(distanceRef.current);
     }
     lastPointRef.current = c;
-    const path = breadcrumbRef.current?.getPath();
-    path?.push(new google.maps.LatLng(c.lat, c.lng));
+    rawPointsRef.current.push(c);
+    rawTrailRef.current?.getPath().push(new google.maps.LatLng(c.lat, c.lng));
+    // Optimistic: extend the snapped polyline straight to the new point until the snap call returns.
+    breadcrumbRef.current?.getPath().push(new google.maps.LatLng(c.lat, c.lng));
+    scheduleSnap();
     setPoints((n) => n + 1);
     const rid = runIdRef.current;
     if (!rid) return;
