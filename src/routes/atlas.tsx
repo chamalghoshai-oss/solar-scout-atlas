@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { loadMaps, cellKey } from "@/lib/gmaps";
@@ -24,6 +24,7 @@ export const Route = createFileRoute("/atlas")({
 function AtlasPage() {
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
+  const navigate = useNavigate();
   const layersRef = useRef<{
     runLines: google.maps.Polyline[];
     heatMarkers: google.maps.Marker[];
@@ -147,6 +148,11 @@ function AtlasPage() {
         label: undefined,
         zIndex: 200,
       });
+      if (!isPot) {
+        m.addListener("click", () => {
+          navigate({ to: "/leads/$id", params: { id: String(l.id) } });
+        });
+      }
       if (isPot) {
         layersRef.current.potentialMarkers.push(m);
       } else {
