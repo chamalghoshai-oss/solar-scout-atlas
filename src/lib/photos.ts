@@ -6,6 +6,10 @@ export type PhotoMeta = {
   lat?: number | null;
   lng?: number | null;
   ts: string;
+  accuracy?: number | null;
+  heading?: number | null;
+  address?: string | null;
+  stamped?: boolean;
 };
 
 export async function uploadPhoto(file: File, geotag?: { lat: number; lng: number } | null): Promise<PhotoMeta> {
