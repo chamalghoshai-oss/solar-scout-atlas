@@ -1,5 +1,5 @@
 /// <reference types="google.maps" />
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -68,6 +68,9 @@ export function RoofPlanner({
   const panelPolysRef = useRef<Map<string, google.maps.Polygon>>(new Map());
   const draftLineRef = useRef<google.maps.Polyline | null>(null);
   const draftDotsRef = useRef<google.maps.Marker[]>([]);
+  const projectionOverlayRef = useRef<google.maps.OverlayView | null>(null);
+  const pointerStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const lastPointerDraftAtRef = useRef(0);
   const mapClickListenerRef = useRef<google.maps.MapsEventListener | null>(null);
   const editListenersRef = useRef<google.maps.MapsEventListener[]>([]);
   const resizeObsRef = useRef<ResizeObserver | null>(null);
@@ -115,6 +118,12 @@ export function RoofPlanner({
       // Force flat top-down satellite — disable Google's 45° aerial imagery.
       map.setTilt(0);
       mapRef.current = map;
+      const projectionOverlay = new google.maps.OverlayView();
+      projectionOverlay.onAdd = () => undefined;
+      projectionOverlay.draw = () => undefined;
+      projectionOverlay.onRemove = () => undefined;
+      projectionOverlay.setMap(map);
+      projectionOverlayRef.current = projectionOverlay;
 
       // The dialog can mount with 0 size for a frame; trigger resize so
       // Google Maps re-measures and actually paints satellite tiles.
@@ -134,6 +143,7 @@ export function RoofPlanner({
       }
 
       mapClickListenerRef.current = map.addListener("click", (e: google.maps.MapMouseEvent) => {
+        if (Date.now() - lastPointerDraftAtRef.current < 450) return;
         const m = modeRef.current;
         if ((m === "roof" || m === "cutout") && e.latLng) {
           addDraftVertex({ lat: e.latLng.lat(), lng: e.latLng.lng() });
@@ -171,6 +181,9 @@ export function RoofPlanner({
     resizeObsRef.current = null;
     mapClickListenerRef.current?.remove();
     mapClickListenerRef.current = null;
+    projectionOverlayRef.current?.setMap(null);
+    projectionOverlayRef.current = null;
+    pointerStartRef.current = null;
     editListenersRef.current.forEach((l) => l.remove());
     editListenersRef.current = [];
     clearDraft();
@@ -223,6 +236,35 @@ export function RoofPlanner({
     draftDotsRef.current.push(dot);
     setDraftCount(line.getPath().getLength());
   }
+
+  function pointToLatLng(clientX: number, clientY: number): LatLng | null {
+    const projection = projectionOverlayRef.current?.getProjection();
+    const el = mapEl.current;
+    if (!projection || !el) return null;
+    const rect = el.getBoundingClientRect();
+    const ll = projection.fromContainerPixelToLatLng(new google.maps.Point(clientX - rect.left, clientY - rect.top));
+    return ll ? { lat: ll.lat(), lng: ll.lng() } : null;
+  }
+
+  function handleMapPointerDown(e: PointerEvent<HTMLDivElement>) {
+    if (modeRef.current !== "roof" && modeRef.current !== "cutout") return;
+    pointerStartRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+  }
+
+  function handleMapPointerUp(e: PointerEvent<HTMLDivElement>) {
+    const m = modeRef.current;
+    if (m !== "roof" && m !== "cutout") return;
+    const start = pointerStartRef.current;
+    pointerStartRef.current = null;
+    if (!start) return;
+    const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y);
+    if (moved > 12 || Date.now() - start.t > 700) return;
+    const p = pointToLatLng(e.clientX, e.clientY);
+    if (!p) return;
+    lastPointerDraftAtRef.current = Date.now();
+    addDraftVertex(p);
+  }
+
   function clearDraft() {
     draftLineRef.current?.setMap(null);
     draftLineRef.current = null;
@@ -422,7 +464,12 @@ export function RoofPlanner({
         </DialogHeader>
 
         <div className="relative flex-1 overflow-hidden">
-          <div ref={mapEl} className="absolute inset-0" />
+          <div
+            ref={mapEl}
+            className="absolute inset-0"
+            onPointerDownCapture={handleMapPointerDown}
+            onPointerUpCapture={handleMapPointerUp}
+          />
           {!ready && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/60">
               <Loader2 className="h-5 w-5 animate-spin text-primary" />
