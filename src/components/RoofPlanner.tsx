@@ -95,6 +95,7 @@ export function RoofPlanner({
         zoom: 20,
         mapTypeId: "satellite",
         tilt: 0,
+        heading: 0,
         rotateControl: false,
         streetViewControl: false,
         fullscreenControl: false,
@@ -102,6 +103,8 @@ export function RoofPlanner({
         gestureHandling: "greedy",
         clickableIcons: false,
       });
+      // Force flat top-down satellite — disable Google's 45° aerial imagery.
+      map.setTilt(0);
       mapRef.current = map;
 
       // The dialog can mount with 0 size for a frame; trigger resize so
