@@ -307,6 +307,7 @@ export function RoofPlanner({
     }
     clearDraft();
     setMode("idle");
+    setPanelCollapsed(false);
     scheduleRelayout();
   }
 
@@ -410,16 +411,19 @@ export function RoofPlanner({
   // --- Toolbar actions ---
   function startRoof() {
     clearDraft();
+    setPanelCollapsed(true);
     setMode("roof");
   }
   function startCutout() {
     if (!hasRoof) return;
     clearDraft();
+    setPanelCollapsed(true);
     setMode("cutout");
   }
   function cancelDraw() {
     clearDraft();
     setMode("idle");
+    setPanelCollapsed(false);
   }
   function clearAll() {
     roofPolyRef.current?.setMap(null);
