@@ -14,7 +14,6 @@ import { Route as LeadsRouteImport } from './routes/leads'
 import { Route as AtlasRouteImport } from './routes/atlas'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LeadsIdRouteImport } from './routes/leads.$id'
-import { Route as LeadsIdRoofRouteImport } from './routes/leads.$id.roof'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
@@ -41,27 +40,20 @@ const LeadsIdRoute = LeadsIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => LeadsRoute,
 } as any)
-const LeadsIdRoofRoute = LeadsIdRoofRouteImport.update({
-  id: '/roof',
-  path: '/roof',
-  getParentRoute: () => LeadsIdRoute,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/atlas': typeof AtlasRoute
   '/leads': typeof LeadsRouteWithChildren
   '/settings': typeof SettingsRoute
-  '/leads/$id': typeof LeadsIdRouteWithChildren
-  '/leads/$id/roof': typeof LeadsIdRoofRoute
+  '/leads/$id': typeof LeadsIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/atlas': typeof AtlasRoute
   '/leads': typeof LeadsRouteWithChildren
   '/settings': typeof SettingsRoute
-  '/leads/$id': typeof LeadsIdRouteWithChildren
-  '/leads/$id/roof': typeof LeadsIdRoofRoute
+  '/leads/$id': typeof LeadsIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -69,28 +61,14 @@ export interface FileRoutesById {
   '/atlas': typeof AtlasRoute
   '/leads': typeof LeadsRouteWithChildren
   '/settings': typeof SettingsRoute
-  '/leads/$id': typeof LeadsIdRouteWithChildren
-  '/leads/$id/roof': typeof LeadsIdRoofRoute
+  '/leads/$id': typeof LeadsIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/atlas'
-    | '/leads'
-    | '/settings'
-    | '/leads/$id'
-    | '/leads/$id/roof'
+  fullPaths: '/' | '/atlas' | '/leads' | '/settings' | '/leads/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/atlas' | '/leads' | '/settings' | '/leads/$id' | '/leads/$id/roof'
-  id:
-    | '__root__'
-    | '/'
-    | '/atlas'
-    | '/leads'
-    | '/settings'
-    | '/leads/$id'
-    | '/leads/$id/roof'
+  to: '/' | '/atlas' | '/leads' | '/settings' | '/leads/$id'
+  id: '__root__' | '/' | '/atlas' | '/leads' | '/settings' | '/leads/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -137,33 +115,15 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LeadsIdRouteImport
       parentRoute: typeof LeadsRoute
     }
-    '/leads/$id/roof': {
-      id: '/leads/$id/roof'
-      path: '/roof'
-      fullPath: '/leads/$id/roof'
-      preLoaderRoute: typeof LeadsIdRoofRouteImport
-      parentRoute: typeof LeadsIdRoute
-    }
   }
 }
 
-interface LeadsIdRouteChildren {
-  LeadsIdRoofRoute: typeof LeadsIdRoofRoute
-}
-
-const LeadsIdRouteChildren: LeadsIdRouteChildren = {
-  LeadsIdRoofRoute: LeadsIdRoofRoute,
-}
-
-const LeadsIdRouteWithChildren =
-  LeadsIdRoute._addFileChildren(LeadsIdRouteChildren)
-
 interface LeadsRouteChildren {
-  LeadsIdRoute: typeof LeadsIdRouteWithChildren
+  LeadsIdRoute: typeof LeadsIdRoute
 }
 
 const LeadsRouteChildren: LeadsRouteChildren = {
-  LeadsIdRoute: LeadsIdRouteWithChildren,
+  LeadsIdRoute: LeadsIdRoute,
 }
 
 const LeadsRouteWithChildren = LeadsRoute._addFileChildren(LeadsRouteChildren)
