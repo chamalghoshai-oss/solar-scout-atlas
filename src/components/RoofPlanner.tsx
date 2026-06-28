@@ -107,6 +107,19 @@ export function RoofPlanner({
         return;
       }
       if (cancelled) return;
+      // Wait until the dialog finishes its open animation and the container
+      // has a real size — initialising the Map on a 0×0 element leaves it
+      // blank because Google never requests any tiles.
+      const waitForSize = async () => {
+        for (let i = 0; i < 60; i++) {
+          const r = mapHost.getBoundingClientRect();
+          if (r.width > 50 && r.height > 50) return true;
+          await new Promise((res) => setTimeout(res, 50));
+        }
+        return mapHost.getBoundingClientRect().width > 0;
+      };
+      await waitForSize();
+      if (cancelled) return;
       const map = new maps.Map(mapHost, {
         center,
         zoom: 20,

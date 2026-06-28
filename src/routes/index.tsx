@@ -7,6 +7,7 @@ import { Loader2, Play, Square, Crosshair, Plus, Sun } from "lucide-react";
 import { loadMaps, distM } from "@/lib/gmaps";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
+import { snapToRoads } from "@/lib/roads.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/")({
@@ -25,6 +26,11 @@ function LiveRun() {
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const breadcrumbRef = useRef<google.maps.Polyline | null>(null);
+  const rawTrailRef = useRef<google.maps.Polyline | null>(null);
+  const rawPointsRef = useRef<Array<{ lat: number; lng: number }>>([]);
+  const snappedPointsRef = useRef<Array<{ lat: number; lng: number }>>([]);
+  const snapTimerRef = useRef<number | null>(null);
+  const snapInFlightRef = useRef(false);
   const meMarkerRef = useRef<google.maps.Marker | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const runIdRef = useRef<string | null>(null);
@@ -69,6 +75,13 @@ function LiveRun() {
           strokeColor: "#ea7a1d",
           strokeOpacity: 0.95,
           strokeWeight: 5,
+          map,
+        });
+        rawTrailRef.current = new g.maps.Polyline({
+          path: [],
+          strokeColor: "#9ca3af",
+          strokeOpacity: 0.6,
+          strokeWeight: 2,
           map,
         });
         // map clicks → quick lead
@@ -209,6 +222,9 @@ function LiveRun() {
     distanceRef.current = 0;
     lastPointRef.current = null;
     breadcrumbRef.current?.setPath([]);
+    rawTrailRef.current?.setPath([]);
+    rawPointsRef.current = [];
+    snappedPointsRef.current = [];
     setPoints(0);
     setDistance(0);
     setRunning(true);
@@ -233,8 +249,11 @@ function LiveRun() {
       setDistance(distanceRef.current);
     }
     lastPointRef.current = c;
-    const path = breadcrumbRef.current?.getPath();
-    path?.push(new google.maps.LatLng(c.lat, c.lng));
+    rawPointsRef.current.push(c);
+    rawTrailRef.current?.getPath().push(new google.maps.LatLng(c.lat, c.lng));
+    // Optimistic: extend the snapped polyline straight to the new point until the snap call returns.
+    breadcrumbRef.current?.getPath().push(new google.maps.LatLng(c.lat, c.lng));
+    scheduleSnap();
     setPoints((n) => n + 1);
     const rid = runIdRef.current;
     if (!rid) return;
@@ -248,6 +267,10 @@ function LiveRun() {
   }
 
   async function stopRun() {
+    if (snapTimerRef.current) window.clearTimeout(snapTimerRef.current);
+    snapTimerRef.current = null;
+    // Final pass so the saved trail is road-aligned.
+    await runSnap();
     if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
     watchIdRef.current = null;
     const rid = runIdRef.current;
@@ -257,6 +280,35 @@ function LiveRun() {
     runIdRef.current = null;
     setRunning(false);
     toast.success(`Run ended · ${(distanceRef.current / 1000).toFixed(2)} km`);
+  }
+
+  function scheduleSnap() {
+    if (snapTimerRef.current) window.clearTimeout(snapTimerRef.current);
+    snapTimerRef.current = window.setTimeout(() => {
+      void runSnap();
+    }, 1500);
+  }
+
+  async function runSnap() {
+    if (snapInFlightRef.current) {
+      scheduleSnap();
+      return;
+    }
+    const raw = rawPointsRef.current;
+    if (raw.length < 2) return;
+    const tail = raw.slice(-100);
+    snapInFlightRef.current = true;
+    try {
+      const { snapped, error } = await snapToRoads({ data: { points: tail, interpolate: true } });
+      if (error || snapped.length === 0) return;
+      const olderCount = Math.max(0, raw.length - tail.length);
+      const kept = snappedPointsRef.current.slice(0, olderCount);
+      const next = [...kept, ...snapped.map((s) => ({ lat: s.lat, lng: s.lng }))];
+      snappedPointsRef.current = next;
+      breadcrumbRef.current?.setPath(next.map((p) => new google.maps.LatLng(p.lat, p.lng)));
+    } finally {
+      snapInFlightRef.current = false;
+    }
   }
 
   function addAtCenter() {
