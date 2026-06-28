@@ -669,3 +669,19 @@ function compassLabel(deg: number): string {
   const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
   return dirs[Math.round(deg / 45) % 8];
 }
+
+function computeSkip(panels: PanelRect[], roof: LatLng[], targetKw: number, watt: number): Set<string> {
+  if (!targetKw || targetKw <= 0 || panels.length === 0) return new Set();
+  const keep = Math.min(panels.length, Math.max(1, Math.ceil((targetKw * 1000) / watt)));
+  if (keep >= panels.length) return new Set();
+  const anchor = polyCentroid(roof);
+  const c0 = toXY(anchor, anchor); // {0,0}
+  const scored = panels.map((p) => {
+    const cx = toXY(p.center, anchor);
+    const d = Math.hypot(cx.x - c0.x, cx.y - c0.y);
+    return { id: p.id, d };
+  });
+  scored.sort((a, b) => a.d - b.d);
+  const keepIds = new Set(scored.slice(0, keep).map((s) => s.id));
+  return new Set(panels.filter((p) => !keepIds.has(p.id)).map((p) => p.id));
+}
