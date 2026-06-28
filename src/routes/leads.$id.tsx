@@ -13,7 +13,7 @@ import { ArrowLeft, MapPin, MessageCircle, Save, Trash2, Camera, Loader2, SunMed
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { getSignedUrls, uploadPhoto, type PhotoMeta } from "@/lib/photos";
 import { toast } from "sonner";
-import { type RoofPlan } from "@/components/RoofPlanner";
+import { RoofPlanner, type RoofPlan } from "@/components/RoofPlanner";
 import { GeoCamera } from "@/components/GeoCamera";
 
 export const Route = createFileRoute("/leads/$id")({
@@ -50,6 +50,7 @@ function LeadDetail() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [plannerOpen, setPlannerOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -279,7 +280,7 @@ function LeadDetail() {
               size="sm"
               variant="default"
               className="h-7 px-2 text-xs"
-              onClick={() => navigate({ to: "/leads/$id/roof", params: { id: lead.id } })}
+              onClick={() => setPlannerOpen(true)}
             >
               {planSummary ? "Edit plan" : "Plan roof"}
             </Button>
@@ -314,6 +315,29 @@ function LeadDetail() {
         onOpenChange={setCameraOpen}
         fallbackLatLng={{ lat: lead.lat, lng: lead.lng }}
         onCaptured={onGeoCaptured}
+      />
+
+      <RoofPlanner
+        open={plannerOpen}
+        onOpenChange={setPlannerOpen}
+        center={{ lat: lead.lat, lng: lead.lng }}
+        initial={lead.roof_plan}
+        onSave={async (plan) => {
+          const active = plan.panels.length - (plan.disabled?.length ?? 0);
+          const kwFromPlan = (active * plan.spec.watt) / 1000;
+          const nextKw = lead.required_kw ?? Math.round(kwFromPlan * 100) / 100;
+          const { error } = await supabase
+            .from("leads")
+            .update({ roof_plan: plan, required_kw: nextKw })
+            .eq("id", lead.id);
+          if (error) {
+            toast.error(error.message);
+            return;
+          }
+          setLead({ ...lead, roof_plan: plan, required_kw: nextKw });
+          toast.success("Roof plan saved");
+          setPlannerOpen(false);
+        }}
       />
     </AppShell>
   );
