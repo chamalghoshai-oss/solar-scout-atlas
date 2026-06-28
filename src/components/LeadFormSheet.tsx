@@ -18,10 +18,10 @@ export type LeadDraft = {
 };
 
 export const STATUSES = [
-  { value: "interested", label: "Interested" },
-  { value: "not_home", label: "Not Home" },
-  { value: "follow_up", label: "Follow-up Required" },
-  { value: "converted", label: "Converted" },
+  { value: "hot", label: "Hot" },
+  { value: "warm", label: "Warm" },
+  { value: "cold", label: "Cold (Quoted)" },
+  { value: "reference", label: "Reference" },
   { value: "not_interested", label: "Not Interested" },
 ];
 
@@ -52,7 +52,7 @@ export function LeadFormSheet({
       setPhone("+91");
       setKw("");
       setNotes("");
-      setStatus("interested");
+      setStatus("hot");
       setPhotos([]);
     }
   }, [open, draft?.lat, draft?.lng]);
