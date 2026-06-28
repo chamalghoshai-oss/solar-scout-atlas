@@ -88,6 +88,10 @@ export function RoofPlanner({
   const [panels, setPanels] = useState<PanelRect[]>(initial?.panels ?? []);
   const [autoFit, setAutoFit] = useState(true);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const setMapNode = useCallback((el: HTMLDivElement | null) => {
+    mapEl.current = el;
+    setMapHost(el);
+  }, []);
 
   // Init map.
   useEffect(() => {
@@ -466,10 +470,7 @@ export function RoofPlanner({
 
         <div className="relative flex-1 overflow-hidden">
           <div
-            ref={(el) => {
-              mapEl.current = el;
-              setMapHost(el);
-            }}
+            ref={setMapNode}
             className="absolute inset-0"
             onPointerDownCapture={handleMapPointerDown}
             onPointerUpCapture={handleMapPointerUp}
