@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Save, Loader2, Sun } from "lucide-react";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -30,6 +31,9 @@ function SettingsPage() {
   const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [business, setBusiness] = useState<boolean>(
+    typeof window !== "undefined" && localStorage.getItem("wa_business") === "1"
+  );
 
   useEffect(() => {
     (async () => {
@@ -43,6 +47,11 @@ function SettingsPage() {
       setLoading(false);
     })();
   }, []);
+
+  function toggleBusiness(v: boolean) {
+    setBusiness(v);
+    try { localStorage.setItem("wa_business", v ? "1" : "0"); } catch { /* ignore */ }
+  }
 
   async function save() {
     setSaving(true);
@@ -90,6 +99,13 @@ function SettingsPage() {
           <p className="mt-1 text-[11px] text-muted-foreground">
             Placeholders: <code>{"{name}"}</code> <code>{"{kw}"}</code> <code>{"{sender}"}</code> <code>{"{company}"}</code>
           </p>
+        </div>
+        <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+          <div>
+            <Label className="text-sm">Open in WhatsApp Business</Label>
+            <p className="text-[11px] text-muted-foreground">Android opens com.whatsapp.w4b. iOS uses whichever WhatsApp is installed.</p>
+          </div>
+          <Switch checked={business} onCheckedChange={toggleBusiness} />
         </div>
         <Button className="w-full" onClick={save} disabled={saving}>
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="mr-2 h-4 w-4" /> Save</>}
