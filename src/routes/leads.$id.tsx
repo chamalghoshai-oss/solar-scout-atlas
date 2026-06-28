@@ -9,10 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { STATUSES, StatusBadgePlaceholder } from "./leads-helpers";
-import { ArrowLeft, MapPin, MessageCircle, Save, Trash2, Camera, Loader2 } from "lucide-react";
+import { ArrowLeft, MapPin, MessageCircle, Save, Trash2, Camera, Loader2, SunMedium, ImagePlus } from "lucide-react";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { getSignedUrls, uploadPhoto, type PhotoMeta } from "@/lib/photos";
 import { toast } from "sonner";
+import { RoofPlanner, type RoofPlan } from "@/components/RoofPlanner";
+import { GeoCamera } from "@/components/GeoCamera";
 
 export const Route = createFileRoute("/leads/$id")({
   head: () => ({
@@ -33,6 +35,7 @@ type Lead = {
   type: string;
   visited: boolean;
   photos: PhotoMeta[];
+  roof_plan: RoofPlan | null;
   created_at: string;
 };
 
@@ -46,6 +49,8 @@ function LeadDetail() {
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [plannerOpen, setPlannerOpen] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -98,6 +103,7 @@ function LeadDetail() {
         status: lead.status,
         visited: lead.visited,
         photos: lead.photos,
+        roof_plan: lead.roof_plan,
       })
       .eq("id", lead.id);
     setSaving(false);
@@ -128,6 +134,29 @@ function LeadDetail() {
     }
   }
 
+  async function onGeoCaptured(meta: PhotoMeta) {
+    if (!lead) return;
+    const next = [...(lead.photos || []), meta];
+    setLead({ ...lead, photos: next });
+    const newSigned = await getSignedUrls([meta.path]);
+    setSignedUrls((s) => ({ ...s, ...newSigned }));
+    // persist immediately so the geotag photo is saved even before "Save"
+    await supabase.from("leads").update({ photos: next }).eq("id", lead.id);
+  }
+
+  async function onRoofSaved(plan: RoofPlan) {
+    if (!lead) return;
+    const kwFromPlan = (plan.panels.length - plan.disabled.length) * plan.spec.watt / 1000;
+    const nextKw = lead.required_kw ?? Math.round(kwFromPlan * 100) / 100;
+    const next = { ...lead, roof_plan: plan, required_kw: nextKw };
+    setLead(next);
+    await supabase
+      .from("leads")
+      .update({ roof_plan: plan, required_kw: nextKw })
+      .eq("id", lead.id);
+    toast.success("Roof plan saved");
+  }
+
   if (!lead) {
     return (
       <AppShell>
@@ -137,6 +166,13 @@ function LeadDetail() {
   }
 
   const isPotential = lead.type === "potential";
+  const planSummary = lead.roof_plan
+    ? {
+        active: lead.roof_plan.panels.length - (lead.roof_plan.disabled?.length ?? 0),
+        total: lead.roof_plan.panels.length,
+        kw: ((lead.roof_plan.panels.length - (lead.roof_plan.disabled?.length ?? 0)) * lead.roof_plan.spec.watt) / 1000,
+      }
+    : null;
 
   return (
     <AppShell>
@@ -215,10 +251,15 @@ function LeadDetail() {
         <div>
           <div className="mb-2 flex items-center justify-between">
             <Label>Photos</Label>
-            <label className="flex cursor-pointer items-center gap-1 rounded-md border border-border px-2 py-1 text-xs">
-              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />} Add
-              <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(e) => addPhotos(e.target.files)} />
-            </label>
+            <div className="flex items-center gap-1.5">
+              <Button size="sm" variant="default" className="h-7 px-2 text-xs" onClick={() => setCameraOpen(true)}>
+                <Camera className="mr-1 h-3.5 w-3.5" /> Geo photo
+              </Button>
+              <label className="flex cursor-pointer items-center gap-1 rounded-md border border-border px-2 py-1 text-xs">
+                {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />} Upload
+                <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => addPhotos(e.target.files)} />
+              </label>
+            </div>
           </div>
           {(lead.photos?.length ?? 0) === 0 ? (
             <p className="rounded-md border border-dashed border-border p-3 text-center text-xs text-muted-foreground">No photos yet.</p>
@@ -234,11 +275,35 @@ function LeadDetail() {
                     )}
                   </div>
                   {p.lat != null && (
-                    <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{p.lat.toFixed(4)},{p.lng?.toFixed(4)}</p>
+                    <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                      {p.lat.toFixed(4)},{p.lng?.toFixed(4)}{p.stamped ? " · stamped" : ""}
+                    </p>
                   )}
                 </a>
               ))}
             </div>
+          )}
+        </div>
+
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <Label className="flex items-center gap-1"><SunMedium className="h-3.5 w-3.5 text-primary" /> Roof & solar plan</Label>
+            <Button size="sm" variant="default" className="h-7 px-2 text-xs" onClick={() => setPlannerOpen(true)}>
+              {planSummary ? "Edit plan" : "Plan roof"}
+            </Button>
+          </div>
+          {planSummary ? (
+            <div className="rounded-md border border-border bg-card p-3">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <Mini label="Panels" value={`${planSummary.active}/${planSummary.total}`} />
+                <Mini label="System" value={`${planSummary.kw.toFixed(2)} kW`} accent />
+                <Mini label="Azimuth" value={`${lead.roof_plan!.spec.azimuthDeg}° / ${lead.roof_plan!.spec.tiltDeg}°`} />
+              </div>
+            </div>
+          ) : (
+            <p className="rounded-md border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
+              Draw the roof on satellite imagery, then auto-fit south-facing panels at 11° tilt.
+            </p>
           )}
         </div>
 
@@ -251,6 +316,29 @@ function LeadDetail() {
           </Button>
         </div>
       </div>
+
+      <RoofPlanner
+        open={plannerOpen}
+        onOpenChange={setPlannerOpen}
+        center={{ lat: lead.lat, lng: lead.lng }}
+        initial={lead.roof_plan}
+        onSave={onRoofSaved}
+      />
+      <GeoCamera
+        open={cameraOpen}
+        onOpenChange={setCameraOpen}
+        fallbackLatLng={{ lat: lead.lat, lng: lead.lng }}
+        onCaptured={onGeoCaptured}
+      />
     </AppShell>
+  );
+}
+
+function Mini({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className={`rounded-md border px-2 py-1.5 ${accent ? "border-primary/30 bg-primary/10" : ""}`}>
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className={`text-sm font-bold ${accent ? "text-primary" : ""}`}>{value}</div>
+    </div>
   );
 }

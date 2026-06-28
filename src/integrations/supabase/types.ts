@@ -26,6 +26,7 @@ export type Database = {
           phone: string | null
           photos: Json
           required_kw: number | null
+          roof_plan: Json | null
           status: string
           type: string
           updated_at: string
@@ -42,6 +43,7 @@ export type Database = {
           phone?: string | null
           photos?: Json
           required_kw?: number | null
+          roof_plan?: Json | null
           status?: string
           type?: string
           updated_at?: string
@@ -58,6 +60,7 @@ export type Database = {
           phone?: string | null
           photos?: Json
           required_kw?: number | null
+          roof_plan?: Json | null
           status?: string
           type?: string
           updated_at?: string

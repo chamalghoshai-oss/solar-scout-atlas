@@ -20,6 +20,15 @@ export async function loadMaps() {
   return { maps, marker, g: google };
 }
 
+export async function loadDrawing() {
+  configure();
+  const [maps, geometry] = await Promise.all([
+    importLibrary("maps"),
+    importLibrary("geometry"),
+  ]);
+  return { maps, geometry, g: google };
+}
+
 // Haversine distance in meters
 export function distM(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
   const R = 6371000;

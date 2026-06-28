@@ -6,6 +6,10 @@ export type PhotoMeta = {
   lat?: number | null;
   lng?: number | null;
   ts: string;
+  accuracy?: number | null;
+  heading?: number | null;
+  address?: string | null;
+  stamped?: boolean;
 };
 
 export async function uploadPhoto(file: File, geotag?: { lat: number; lng: number } | null): Promise<PhotoMeta> {
@@ -19,6 +23,30 @@ export async function uploadPhoto(file: File, geotag?: { lat: number; lng: numbe
   });
   if (error) throw error;
   return { path, lat: geotag?.lat ?? null, lng: geotag?.lng ?? null, ts: new Date().toISOString() };
+}
+
+export async function uploadPhotoBlob(
+  blob: Blob,
+  extra: Partial<PhotoMeta> & { lat?: number | null; lng?: number | null }
+): Promise<PhotoMeta> {
+  const device = getDeviceId();
+  const path = `${device}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const { error } = await supabase.storage.from("lead-photos").upload(path, blob, {
+    cacheControl: "3600",
+    upsert: false,
+    contentType: "image/jpeg",
+  });
+  if (error) throw error;
+  return {
+    path,
+    ts: new Date().toISOString(),
+    stamped: true,
+    lat: extra.lat ?? null,
+    lng: extra.lng ?? null,
+    accuracy: extra.accuracy ?? null,
+    heading: extra.heading ?? null,
+    address: extra.address ?? null,
+  };
 }
 
 export async function getSignedUrl(path: string): Promise<string> {
