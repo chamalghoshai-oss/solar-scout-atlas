@@ -27,7 +27,7 @@ function AtlasPage() {
   const layersRef = useRef<{
     runLines: google.maps.Polyline[];
     heatMarkers: google.maps.Marker[];
-    leadMarkers: google.maps.Marker[];
+    leadMarkers: { marker: google.maps.Marker; status: string; type: string }[];
     potentialMarkers: google.maps.Marker[];
   }>({ runLines: [], heatMarkers: [], leadMarkers: [], potentialMarkers: [] });
 
@@ -36,6 +36,15 @@ function AtlasPage() {
   const [showHeat, setShowHeat] = useState(true);
   const [showLeads, setShowLeads] = useState(true);
   const [showPotential, setShowPotential] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<Record<string, boolean>>({
+    hot: true,
+    warm: true,
+    cold: true,
+    reference: true,
+    not_interested: true,
+    other: true,
+  });
   const [stats, setStats] = useState({ runs: 0, leads: 0, potential: 0, km: 0 });
 
   useEffect(() => {
@@ -134,10 +143,15 @@ function AtlasPage() {
         position: { lat: Number(l.lat), lng: Number(l.lng) },
         map,
         title: l.name ?? (isPot ? "Potential house" : "Lead"),
-        icon: pinFor(l.type as string, l.status as string),
+        icon: pinFor(l.type as string, l.status as string, l.name ?? null),
+        label: undefined,
         zIndex: 200,
       });
-      (isPot ? layersRef.current.potentialMarkers : layersRef.current.leadMarkers).push(m);
+      if (isPot) {
+        layersRef.current.potentialMarkers.push(m);
+      } else {
+        layersRef.current.leadMarkers.push({ marker: m, status: String(l.status), type: String(l.type) });
+      }
       bounds.extend({ lat: Number(l.lat), lng: Number(l.lng) });
     }
 
@@ -159,8 +173,12 @@ function AtlasPage() {
     layersRef.current.heatMarkers.forEach((m) => m.setMap(showHeat ? mapRef.current : null));
   }, [showHeat]);
   useEffect(() => {
-    layersRef.current.leadMarkers.forEach((m) => m.setMap(showLeads ? mapRef.current : null));
-  }, [showLeads]);
+    layersRef.current.leadMarkers.forEach(({ marker, status }) => {
+      const key = statusKey(status);
+      const visible = showLeads && (statusFilter[key] ?? true);
+      marker.setMap(visible ? mapRef.current : null);
+    });
+  }, [showLeads, statusFilter]);
   useEffect(() => {
     layersRef.current.potentialMarkers.forEach((m) => m.setMap(showPotential ? mapRef.current : null));
   }, [showPotential]);
@@ -184,16 +202,43 @@ function AtlasPage() {
         </div>
       </div>
 
-      <div className="absolute bottom-24 left-4 right-4 z-10 mx-auto max-w-md rounded-2xl border border-border bg-background/95 p-3 shadow-sm backdrop-blur">
-        <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-          <Layers className="h-3.5 w-3.5" /> LAYERS
-        </div>
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <Toggle id="l-runs" checked={showRuns} onChange={setShowRuns} label="Route trails" dot="#ea7a1d" />
-          <Toggle id="l-heat" checked={showHeat} onChange={setShowHeat} label="Repeat heat" dot="#dc2626" />
-          <Toggle id="l-leads" checked={showLeads} onChange={setShowLeads} label="Leads" dot="#ea7a1d" />
-          <Toggle id="l-pot" checked={showPotential} onChange={setShowPotential} label="Potential" dot="#9ca3af" />
-        </div>
+      <div className="absolute bottom-24 left-4 right-4 z-10 mx-auto max-w-md">
+        {panelOpen ? (
+          <div className="rounded-2xl border border-border bg-background/95 p-3 shadow-sm backdrop-blur">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <Layers className="h-3.5 w-3.5" /> LAYERS &amp; FILTERS
+              </div>
+              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setPanelOpen(false)}>
+                <ChevronDown className="h-3.5 w-3.5" /> Hide
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <Toggle id="l-runs" checked={showRuns} onChange={setShowRuns} label="Route trails" dot="#ea7a1d" />
+              <Toggle id="l-heat" checked={showHeat} onChange={setShowHeat} label="Repeat heat" dot="#dc2626" />
+              <Toggle id="l-leads" checked={showLeads} onChange={setShowLeads} label="Leads" dot="#ea7a1d" />
+              <Toggle id="l-pot" checked={showPotential} onChange={setShowPotential} label="Potential" dot="#9ca3af" />
+            </div>
+            <div className="mt-3 mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Lead status
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <Toggle id="s-hot" checked={statusFilter.hot} onChange={(v) => setStatusFilter((s) => ({ ...s, hot: v }))} label="Hot" dot="#dc2626" />
+              <Toggle id="s-warm" checked={statusFilter.warm} onChange={(v) => setStatusFilter((s) => ({ ...s, warm: v }))} label="Warm" dot="#f97316" />
+              <Toggle id="s-cold" checked={statusFilter.cold} onChange={(v) => setStatusFilter((s) => ({ ...s, cold: v }))} label="Cold (quoted)" dot="#facc15" />
+              <Toggle id="s-ref" checked={statusFilter.reference} onChange={(v) => setStatusFilter((s) => ({ ...s, reference: v }))} label="Reference" dot="#16a34a" square />
+              <Toggle id="s-ni" checked={statusFilter.not_interested} onChange={(v) => setStatusFilter((s) => ({ ...s, not_interested: v }))} label="Not interested" dot="#6b7280" />
+              <Toggle id="s-other" checked={statusFilter.other} onChange={(v) => setStatusFilter((s) => ({ ...s, other: v }))} label="Other" dot="#9ca3af" />
+            </div>
+          </div>
+        ) : (
+          <div className="flex justify-end">
+            <Button size="sm" variant="default" className="h-9 rounded-full px-3 shadow" onClick={() => setPanelOpen(true)}>
+              <Layers className="mr-1 h-4 w-4" /> Layers
+              <ChevronUp className="ml-1 h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
       </div>
     </AppShell>
   );
@@ -208,11 +253,14 @@ function Stat({ n, l }: { n: string | number; l: string }) {
   );
 }
 
-function Toggle({ id, checked, onChange, label, dot }: { id: string; checked: boolean; onChange: (v: boolean) => void; label: string; dot: string }) {
+function Toggle({ id, checked, onChange, label, dot, square }: { id: string; checked: boolean; onChange: (v: boolean) => void; label: string; dot: string; square?: boolean }) {
   return (
     <Label htmlFor={id} className="flex cursor-pointer items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5">
       <span className="flex items-center gap-2">
-        <span className="inline-block h-2 w-2 rounded-full" style={{ background: dot }} />
+        <span
+          className={`inline-block h-2.5 w-2.5 ${square ? "" : "rounded-full"}`}
+          style={{ background: dot }}
+        />
         {label}
       </span>
       <Switch id={id} checked={checked} onCheckedChange={onChange} />
@@ -220,25 +268,64 @@ function Toggle({ id, checked, onChange, label, dot }: { id: string; checked: bo
   );
 }
 
-function pinFor(type: string, status: string): google.maps.Symbol {
-  const fill =
-    type === "potential"
-      ? "#9ca3af"
-      : status === "converted"
-      ? "#16a34a"
-      : status === "follow_up"
-      ? "#eab308"
-      : status === "not_home"
-      ? "#a78bfa"
-      : status === "not_interested"
-      ? "#6b7280"
-      : "#ea7a1d";
+function statusKey(status: string): "hot" | "warm" | "cold" | "reference" | "not_interested" | "other" {
+  // Map legacy statuses to the new buckets.
+  switch (status) {
+    case "hot":
+    case "interested":
+      return "hot";
+    case "warm":
+    case "follow_up":
+    case "not_home":
+      return "warm";
+    case "cold":
+    case "converted":
+      return "cold";
+    case "reference":
+      return "reference";
+    case "not_interested":
+      return "not_interested";
+    default:
+      return "other";
+  }
+}
+
+function statusColor(key: ReturnType<typeof statusKey>): string {
+  return key === "hot"
+    ? "#dc2626"
+    : key === "warm"
+    ? "#f97316"
+    : key === "cold"
+    ? "#facc15"
+    : key === "reference"
+    ? "#16a34a"
+    : key === "not_interested"
+    ? "#6b7280"
+    : "#9ca3af";
+}
+
+function pinFor(type: string, status: string, name: string | null): google.maps.Icon {
+  const key = type === "potential" ? "other" : statusKey(status);
+  const fill = type === "potential" ? "#9ca3af" : statusColor(key);
+  const isSquare = key === "reference";
+  const label = (name ?? "").trim();
+  const shape = isSquare
+    ? `<rect x="3" y="8" width="14" height="14" fill="${fill}" stroke="#1c0f02" stroke-width="1.5"/>`
+    : `<circle cx="10" cy="15" r="7" fill="${fill}" stroke="#1c0f02" stroke-width="1.5"/>`;
+  const textNode = label
+    ? `<text x="22" y="19" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="12" font-weight="700" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke" stroke-linejoin="round">${escapeXml(label)}</text>`
+    : "";
+  const width = label ? Math.min(200, 26 + label.length * 7) : 22;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="30" viewBox="0 0 ${width} 30">${shape}${textNode}</svg>`;
   return {
-    path: google.maps.SymbolPath.CIRCLE,
-    scale: 7,
-    fillColor: fill,
-    fillOpacity: 1,
-    strokeColor: "#1c0f02",
-    strokeWeight: 1.5,
+    url: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`,
+    anchor: new google.maps.Point(10, 15),
+    scaledSize: new google.maps.Size(width, 30),
   };
+}
+
+function escapeXml(s: string): string {
+  return s.replace(/[<>&'"]/g, (c) =>
+    c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === "&" ? "&amp;" : c === "'" ? "&apos;" : "&quot;"
+  );
 }
