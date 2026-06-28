@@ -275,7 +275,12 @@ function LeadDetail() {
         <div>
           <div className="mb-2 flex items-center justify-between">
             <Label className="flex items-center gap-1"><SunMedium className="h-3.5 w-3.5 text-primary" /> Roof & solar plan</Label>
-            <Button size="sm" variant="default" className="h-7 px-2 text-xs" onClick={() => setPlannerOpen(true)}>
+            <Button
+              size="sm"
+              variant="default"
+              className="h-7 px-2 text-xs"
+              onClick={() => navigate({ to: "/leads/$id/roof", params: { id: lead.id } })}
+            >
               {planSummary ? "Edit plan" : "Plan roof"}
             </Button>
           </div>
@@ -304,13 +309,6 @@ function LeadDetail() {
         </div>
       </div>
 
-      <RoofPlanner
-        open={plannerOpen}
-        onOpenChange={setPlannerOpen}
-        center={{ lat: lead.lat, lng: lead.lng }}
-        initial={lead.roof_plan}
-        onSave={onRoofSaved}
-      />
       <GeoCamera
         open={cameraOpen}
         onOpenChange={setCameraOpen}
