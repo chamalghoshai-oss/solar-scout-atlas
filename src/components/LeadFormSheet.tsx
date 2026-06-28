@@ -40,7 +40,7 @@ export function LeadFormSheet({
   const [phone, setPhone] = useState("+91");
   const [kw, setKw] = useState("");
   const [notes, setNotes] = useState("");
-  const [status, setStatus] = useState("interested");
+  const [status, setStatus] = useState("hot");
   const [photos, setPhotos] = useState<PhotoMeta[]>([]);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
