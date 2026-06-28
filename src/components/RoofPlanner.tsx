@@ -12,6 +12,8 @@ import {
   DEFAULT_PANEL,
   layoutPanels,
   polyAreaM2,
+  polyCentroid,
+  toXY,
   totalKW,
   type LatLng,
   type PanelSpec,
@@ -88,6 +90,7 @@ export function RoofPlanner({
   const [panels, setPanels] = useState<PanelRect[]>(initial?.panels ?? []);
   const [autoFit, setAutoFit] = useState(true);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [targetKw, setTargetKw] = useState<number>(0);
   const setMapNode = useCallback((el: HTMLDivElement | null) => {
     mapEl.current = el;
     setMapHost(el);
@@ -372,9 +375,10 @@ export function RoofPlanner({
     const cutouts = cutoutPolysRef.current.map(pathToLatLng);
     const next = layoutPanels(roof, spec, cutouts);
     setPanels(next);
+    const skip = computeSkip(next, roof, targetKw, spec.watt);
     if (autoFit) {
-      setDisabled(new Set());
-      renderPanels(next, new Set());
+      setDisabled(skip);
+      renderPanels(next, skip);
     } else {
       renderPanels(next, disabled);
     }
@@ -419,7 +423,7 @@ export function RoofPlanner({
     if (!ready) return;
     relayout();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spec.azimuthDeg, spec.tiltDeg, spec.rowGap, spec.orientation, spec.watt, ready]);
+  }, [spec.azimuthDeg, spec.tiltDeg, spec.rowGap, spec.orientation, spec.watt, ready, targetKw]);
 
   // --- Toolbar actions ---
   function startRoof() {
@@ -591,6 +595,29 @@ export function RoofPlanner({
                   <Switch checked={spec.orientation === "landscape"}
                     onCheckedChange={(v) => setSpec((s) => ({ ...s, orientation: v ? "landscape" : "portrait" }))} />
                 </div>
+              </div>
+              <div className="rounded-md border px-3 py-2">
+                <div className="mb-1 flex items-center justify-between text-xs">
+                  <Label>Target system size (kW)</Label>
+                  <span className="font-mono text-[11px] text-muted-foreground">
+                    {targetKw > 0 ? `${Math.ceil((targetKw * 1000) / spec.watt)} panels` : "auto-fill"}
+                  </span>
+                </div>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step={0.1}
+                  min={0}
+                  value={targetKw || ""}
+                  placeholder="e.g. 5"
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    setTargetKw(Number.isFinite(n) && n > 0 ? n : 0);
+                  }}
+                />
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  Enter the kW you want and panels arrange centred inside the roof. Leave blank to fill the whole roof.
+                </p>
               </div>
               <div className="flex items-center justify-between rounded-md border px-3 py-1.5 text-xs">
                 <Label>Auto re-fit on edits</Label>
