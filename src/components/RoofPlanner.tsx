@@ -383,8 +383,8 @@ export function RoofPlanner({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[100dvh] max-h-[100dvh] w-full max-w-full gap-0 rounded-none border-0 p-0 sm:rounded-none">
-        <DialogHeader className="border-b px-3 py-2">
+      <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-full max-w-full flex-col gap-0 rounded-none border-0 p-0 sm:rounded-none">
+        <DialogHeader className="shrink-0 border-b px-3 py-2">
           <DialogTitle className="text-base">Roof & solar planner</DialogTitle>
         </DialogHeader>
 
