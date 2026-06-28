@@ -73,6 +73,7 @@ export function RoofPlanner({
   const resizeObsRef = useRef<ResizeObserver | null>(null);
 
   const [ready, setReady] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("idle");
   const modeRef = useRef<Mode>("idle");
   modeRef.current = mode;
@@ -89,7 +90,14 @@ export function RoofPlanner({
     if (!open || !mapEl.current) return;
     let cancelled = false;
     (async () => {
-      const { maps } = await loadDrawing();
+      setMapError(null);
+      let maps: typeof google.maps;
+      try {
+        ({ maps } = await loadDrawing());
+      } catch (err) {
+        if (!cancelled) setMapError(err instanceof Error ? err.message : "Could not load satellite map");
+        return;
+      }
       if (cancelled || !mapEl.current) return;
       const map = new maps.Map(mapEl.current, {
         center,
@@ -174,6 +182,7 @@ export function RoofPlanner({
     panelPolysRef.current.clear();
     mapRef.current = null;
     setReady(false);
+    setMapError(null);
     setHasRoof(false);
     setPanels([]);
     setDisabled(new Set());
@@ -417,6 +426,15 @@ export function RoofPlanner({
           {!ready && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/60">
               <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            </div>
+          )}
+          {mapError && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background px-6 text-center">
+              <div className="max-w-sm rounded-lg border bg-card p-4 shadow-sm">
+                <p className="text-sm font-semibold">Satellite map could not load</p>
+                <p className="mt-1 text-xs text-muted-foreground">{mapError}</p>
+                <Button size="sm" className="mt-3" onClick={() => onOpenChange(false)}>Back to lead</Button>
+              </div>
             </div>
           )}
 
