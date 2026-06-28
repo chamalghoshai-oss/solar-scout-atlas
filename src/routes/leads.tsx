@@ -122,11 +122,16 @@ function LeadsList() {
 export function StatusBadge({ status, type }: { status: string; type: string }) {
   if (type === "potential") return <Badge variant="secondary" className="text-[10px]">Pinned</Badge>;
   const map: Record<string, string> = {
-    interested: "bg-primary/15 text-primary",
-    converted: "bg-green-500/15 text-green-700 dark:text-green-400",
-    follow_up: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400",
-    not_home: "bg-violet-500/15 text-violet-700 dark:text-violet-400",
+    hot: "bg-red-500/15 text-red-700 dark:text-red-400",
+    warm: "bg-orange-500/15 text-orange-700 dark:text-orange-400",
+    cold: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400",
+    reference: "bg-green-500/15 text-green-700 dark:text-green-400",
     not_interested: "bg-muted text-muted-foreground",
+    // legacy fallbacks
+    interested: "bg-red-500/15 text-red-700 dark:text-red-400",
+    follow_up: "bg-orange-500/15 text-orange-700 dark:text-orange-400",
+    converted: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400",
+    not_home: "bg-orange-500/15 text-orange-700 dark:text-orange-400",
   };
   const label = STATUSES.find((s) => s.value === status)?.label ?? status;
   return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${map[status] ?? "bg-muted"}`}>{label}</span>;
