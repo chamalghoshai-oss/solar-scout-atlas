@@ -13,7 +13,7 @@ import { ArrowLeft, MapPin, MessageCircle, Save, Trash2, Camera, Loader2, SunMed
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { getSignedUrls, uploadPhoto, type PhotoMeta } from "@/lib/photos";
 import { toast } from "sonner";
-import { RoofPlanner, type RoofPlan } from "@/components/RoofPlanner";
+import { type RoofPlan } from "@/components/RoofPlanner";
 import { GeoCamera } from "@/components/GeoCamera";
 
 export const Route = createFileRoute("/leads/$id")({
@@ -49,7 +49,6 @@ function LeadDetail() {
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [plannerOpen, setPlannerOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
 
   useEffect(() => {
@@ -144,18 +143,6 @@ function LeadDetail() {
     await supabase.from("leads").update({ photos: next }).eq("id", lead.id);
   }
 
-  async function onRoofSaved(plan: RoofPlan) {
-    if (!lead) return;
-    const kwFromPlan = (plan.panels.length - plan.disabled.length) * plan.spec.watt / 1000;
-    const nextKw = lead.required_kw ?? Math.round(kwFromPlan * 100) / 100;
-    const next = { ...lead, roof_plan: plan, required_kw: nextKw };
-    setLead(next);
-    await supabase
-      .from("leads")
-      .update({ roof_plan: plan, required_kw: nextKw })
-      .eq("id", lead.id);
-    toast.success("Roof plan saved");
-  }
 
   if (!lead) {
     return (
