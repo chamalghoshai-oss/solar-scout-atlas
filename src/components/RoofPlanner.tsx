@@ -1,5 +1,5 @@
 /// <reference types="google.maps" />
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -68,11 +68,16 @@ export function RoofPlanner({
   const panelPolysRef = useRef<Map<string, google.maps.Polygon>>(new Map());
   const draftLineRef = useRef<google.maps.Polyline | null>(null);
   const draftDotsRef = useRef<google.maps.Marker[]>([]);
+  const projectionOverlayRef = useRef<google.maps.OverlayView | null>(null);
+  const pointerStartRef = useRef<{ x: number; y: number; t: number } | null>(null);
+  const lastPointerDraftAtRef = useRef(0);
   const mapClickListenerRef = useRef<google.maps.MapsEventListener | null>(null);
   const editListenersRef = useRef<google.maps.MapsEventListener[]>([]);
   const resizeObsRef = useRef<ResizeObserver | null>(null);
 
+  const [mapHost, setMapHost] = useState<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("idle");
   const modeRef = useRef<Mode>("idle");
   modeRef.current = mode;
@@ -83,15 +88,26 @@ export function RoofPlanner({
   const [panels, setPanels] = useState<PanelRect[]>(initial?.panels ?? []);
   const [autoFit, setAutoFit] = useState(true);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const setMapNode = useCallback((el: HTMLDivElement | null) => {
+    mapEl.current = el;
+    setMapHost(el);
+  }, []);
 
   // Init map.
   useEffect(() => {
-    if (!open || !mapEl.current) return;
+    if (!open || !mapHost) return;
     let cancelled = false;
     (async () => {
-      const { maps } = await loadDrawing();
-      if (cancelled || !mapEl.current) return;
-      const map = new maps.Map(mapEl.current, {
+      setMapError(null);
+      let maps: typeof google.maps;
+      try {
+        ({ maps } = await loadDrawing());
+      } catch (err) {
+        if (!cancelled) setMapError(err instanceof Error ? err.message : "Could not load satellite map");
+        return;
+      }
+      if (cancelled) return;
+      const map = new maps.Map(mapHost, {
         center,
         zoom: 20,
         mapTypeId: "satellite",
@@ -107,6 +123,12 @@ export function RoofPlanner({
       // Force flat top-down satellite — disable Google's 45° aerial imagery.
       map.setTilt(0);
       mapRef.current = map;
+      const projectionOverlay = new google.maps.OverlayView();
+      projectionOverlay.onAdd = () => undefined;
+      projectionOverlay.draw = () => undefined;
+      projectionOverlay.onRemove = () => undefined;
+      projectionOverlay.setMap(map);
+      projectionOverlayRef.current = projectionOverlay;
 
       // The dialog can mount with 0 size for a frame; trigger resize so
       // Google Maps re-measures and actually paints satellite tiles.
@@ -119,13 +141,14 @@ export function RoofPlanner({
         kickResize();
         setTimeout(kickResize, 250);
       });
-      if (mapEl.current && "ResizeObserver" in window) {
+      if ("ResizeObserver" in window) {
         const ro = new ResizeObserver(() => kickResize());
-        ro.observe(mapEl.current);
+        ro.observe(mapHost);
         resizeObsRef.current = ro;
       }
 
       mapClickListenerRef.current = map.addListener("click", (e: google.maps.MapMouseEvent) => {
+        if (Date.now() - lastPointerDraftAtRef.current < 450) return;
         const m = modeRef.current;
         if ((m === "roof" || m === "cutout") && e.latLng) {
           addDraftVertex({ lat: e.latLng.lat(), lng: e.latLng.lng() });
@@ -156,13 +179,16 @@ export function RoofPlanner({
       cleanup();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, mapHost]);
 
   function cleanup() {
     resizeObsRef.current?.disconnect();
     resizeObsRef.current = null;
     mapClickListenerRef.current?.remove();
     mapClickListenerRef.current = null;
+    projectionOverlayRef.current?.setMap(null);
+    projectionOverlayRef.current = null;
+    pointerStartRef.current = null;
     editListenersRef.current.forEach((l) => l.remove());
     editListenersRef.current = [];
     clearDraft();
@@ -174,6 +200,7 @@ export function RoofPlanner({
     panelPolysRef.current.clear();
     mapRef.current = null;
     setReady(false);
+    setMapError(null);
     setHasRoof(false);
     setPanels([]);
     setDisabled(new Set());
@@ -214,6 +241,35 @@ export function RoofPlanner({
     draftDotsRef.current.push(dot);
     setDraftCount(line.getPath().getLength());
   }
+
+  function pointToLatLng(clientX: number, clientY: number): LatLng | null {
+    const projection = projectionOverlayRef.current?.getProjection();
+    const el = mapEl.current;
+    if (!projection || !el) return null;
+    const rect = el.getBoundingClientRect();
+    const ll = projection.fromContainerPixelToLatLng(new google.maps.Point(clientX - rect.left, clientY - rect.top));
+    return ll ? { lat: ll.lat(), lng: ll.lng() } : null;
+  }
+
+  function handleMapPointerDown(e: PointerEvent<HTMLDivElement>) {
+    if (modeRef.current !== "roof" && modeRef.current !== "cutout") return;
+    pointerStartRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+  }
+
+  function handleMapPointerUp(e: PointerEvent<HTMLDivElement>) {
+    const m = modeRef.current;
+    if (m !== "roof" && m !== "cutout") return;
+    const start = pointerStartRef.current;
+    pointerStartRef.current = null;
+    if (!start) return;
+    const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y);
+    if (moved > 12 || Date.now() - start.t > 700) return;
+    const p = pointToLatLng(e.clientX, e.clientY);
+    if (!p) return;
+    lastPointerDraftAtRef.current = Date.now();
+    addDraftVertex(p);
+  }
+
   function clearDraft() {
     draftLineRef.current?.setMap(null);
     draftLineRef.current = null;
@@ -251,6 +307,7 @@ export function RoofPlanner({
     }
     clearDraft();
     setMode("idle");
+    setPanelCollapsed(false);
     scheduleRelayout();
   }
 
@@ -354,16 +411,19 @@ export function RoofPlanner({
   // --- Toolbar actions ---
   function startRoof() {
     clearDraft();
+    setPanelCollapsed(true);
     setMode("roof");
   }
   function startCutout() {
     if (!hasRoof) return;
     clearDraft();
+    setPanelCollapsed(true);
     setMode("cutout");
   }
   function cancelDraw() {
     clearDraft();
     setMode("idle");
+    setPanelCollapsed(false);
   }
   function clearAll() {
     roofPolyRef.current?.setMap(null);
@@ -413,10 +473,24 @@ export function RoofPlanner({
         </DialogHeader>
 
         <div className="relative flex-1 overflow-hidden">
-          <div ref={mapEl} className="absolute inset-0" />
+          <div
+            ref={setMapNode}
+            className="absolute inset-0"
+            onPointerDownCapture={handleMapPointerDown}
+            onPointerUpCapture={handleMapPointerUp}
+          />
           {!ready && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/60">
               <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            </div>
+          )}
+          {mapError && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background px-6 text-center">
+              <div className="max-w-sm rounded-lg border bg-card p-4 shadow-sm">
+                <p className="text-sm font-semibold">Satellite map could not load</p>
+                <p className="mt-1 text-xs text-muted-foreground">{mapError}</p>
+                <Button size="sm" className="mt-3" onClick={() => onOpenChange(false)}>Back to lead</Button>
+              </div>
             </div>
           )}
 

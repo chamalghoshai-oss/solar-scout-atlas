@@ -141,4 +141,8 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
+
+  .gm-style img {
+    max-width: none;
+  }
 }

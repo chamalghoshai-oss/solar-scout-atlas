@@ -43,11 +43,16 @@ function ensureMaps(): Promise<typeof google> {
 
 export async function loadMaps() {
   const g = await ensureMaps();
+  await g.maps.importLibrary?.("maps");
   return { maps: g.maps, marker: g.maps, g };
 }
 
 export async function loadDrawing() {
   const g = await ensureMaps();
+  await Promise.all([
+    g.maps.importLibrary?.("maps"),
+    g.maps.importLibrary?.("geometry"),
+  ]);
   return { maps: g.maps, geometry: g.maps.geometry, g };
 }
 

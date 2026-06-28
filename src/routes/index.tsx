@@ -140,6 +140,10 @@ function LiveRun() {
     return err.message || "Location unavailable";
   }
 
+  function isGeoError(err: unknown): err is GeolocationPositionError {
+    return typeof err === "object" && err !== null && "code" in err && "message" in err;
+  }
+
   function getCurrentPosition(): Promise<GeolocationPosition> {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
@@ -162,7 +166,7 @@ function LiveRun() {
       mapRef.current?.setZoom(17);
       showMe(c);
     } catch (err) {
-      toast.error(err instanceof GeolocationPositionError ? locationMessage(err) : err instanceof Error ? err.message : "Location unavailable");
+      toast.error(isGeoError(err) ? locationMessage(err) : err instanceof Error ? err.message : "Location unavailable");
     }
   }
 
@@ -192,7 +196,7 @@ function LiveRun() {
     try {
       firstPos = await getCurrentPosition();
     } catch (err) {
-      toast.error(err instanceof GeolocationPositionError ? locationMessage(err) : err instanceof Error ? err.message : "Location unavailable");
+      toast.error(isGeoError(err) ? locationMessage(err) : err instanceof Error ? err.message : "Location unavailable");
       return;
     }
     const device = getDeviceId();
