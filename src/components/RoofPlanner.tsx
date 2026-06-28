@@ -103,6 +103,23 @@ export function RoofPlanner({
       });
       mapRef.current = map;
 
+      // The dialog can mount with 0 size for a frame; trigger resize so
+      // Google Maps re-measures and actually paints satellite tiles.
+      const kickResize = () => {
+        if (!mapRef.current) return;
+        google.maps.event.trigger(mapRef.current, "resize");
+        mapRef.current.setCenter(center);
+      };
+      requestAnimationFrame(() => {
+        kickResize();
+        setTimeout(kickResize, 250);
+      });
+      if (mapEl.current && "ResizeObserver" in window) {
+        const ro = new ResizeObserver(() => kickResize());
+        ro.observe(mapEl.current);
+        resizeObsRef.current = ro;
+      }
+
       mapClickListenerRef.current = map.addListener("click", (e: google.maps.MapMouseEvent) => {
         const m = modeRef.current;
         if ((m === "roof" || m === "cutout") && e.latLng) {
