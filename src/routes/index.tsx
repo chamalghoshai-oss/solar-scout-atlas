@@ -222,6 +222,9 @@ function LiveRun() {
     distanceRef.current = 0;
     lastPointRef.current = null;
     breadcrumbRef.current?.setPath([]);
+    rawTrailRef.current?.setPath([]);
+    rawPointsRef.current = [];
+    snappedPointsRef.current = [];
     setPoints(0);
     setDistance(0);
     setRunning(true);
