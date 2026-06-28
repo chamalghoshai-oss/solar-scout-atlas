@@ -4,9 +4,10 @@ import { AppShell } from "@/components/AppShell";
 import { loadMaps, cellKey } from "@/lib/gmaps";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
-import { Loader2, Layers } from "lucide-react";
+import { Loader2, Layers, ChevronDown, ChevronUp } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/atlas")({
   head: () => ({
