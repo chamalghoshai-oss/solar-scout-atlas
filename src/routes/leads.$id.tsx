@@ -83,6 +83,7 @@ function LeadDetail() {
       template: settings.whatsapp_template,
       sender: settings.sender_name,
       company: settings.company_name,
+      business: typeof window !== "undefined" && localStorage.getItem("wa_business") === "1",
     });
   }, [lead, settings]);
 
