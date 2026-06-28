@@ -155,6 +155,8 @@ export function RoofPlanner({
   }, [open]);
 
   function cleanup() {
+    resizeObsRef.current?.disconnect();
+    resizeObsRef.current = null;
     mapClickListenerRef.current?.remove();
     mapClickListenerRef.current = null;
     editListenersRef.current.forEach((l) => l.remove());
