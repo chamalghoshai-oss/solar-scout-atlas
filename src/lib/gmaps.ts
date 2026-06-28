@@ -1,32 +1,54 @@
 /// <reference types="google.maps" />
-import { setOptions, importLibrary } from "@googlemaps/js-api-loader";
 
-let configured = false;
+// Manual <script> bootstrap (callback-based) — the @googlemaps/js-api-loader
+// v2 functional API was not reliably injecting the script tag in this app.
 
-function configure() {
-  if (configured) return;
-  const key = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY as string;
-  const channel = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_TRACKING_ID as string | undefined;
-  setOptions({ key, v: "weekly", ...(channel ? { channel } : {}) });
-  configured = true;
+let scriptPromise: Promise<typeof google> | null = null;
+
+function ensureMaps(): Promise<typeof google> {
+  if (typeof window !== "undefined" && window.google?.maps) {
+    return Promise.resolve(window.google);
+  }
+  if (scriptPromise) return scriptPromise;
+
+  scriptPromise = new Promise<typeof google>((resolve, reject) => {
+    const key = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY as string | undefined;
+    const channel = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_TRACKING_ID as string | undefined;
+    if (!key) {
+      reject(new Error("Missing VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY"));
+      return;
+    }
+    const cbName = "__vertxInitGmaps";
+    (window as unknown as Record<string, unknown>)[cbName] = () => resolve(window.google);
+    const s = document.createElement("script");
+    const params = new URLSearchParams({
+      key,
+      v: "weekly",
+      libraries: "geometry,marker",
+      loading: "async",
+      callback: cbName,
+    });
+    if (channel) params.set("channel", channel);
+    s.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
+    s.async = true;
+    s.defer = true;
+    s.onerror = () => {
+      scriptPromise = null;
+      reject(new Error("Failed to load Google Maps JS"));
+    };
+    document.head.appendChild(s);
+  });
+  return scriptPromise;
 }
 
 export async function loadMaps() {
-  configure();
-  const [maps, marker] = await Promise.all([
-    importLibrary("maps"),
-    importLibrary("marker"),
-  ]);
-  return { maps, marker, g: google };
+  const g = await ensureMaps();
+  return { maps: g.maps, marker: g.maps, g };
 }
 
 export async function loadDrawing() {
-  configure();
-  const [maps, geometry] = await Promise.all([
-    importLibrary("maps"),
-    importLibrary("geometry"),
-  ]);
-  return { maps, geometry, g: google };
+  const g = await ensureMaps();
+  return { maps: g.maps, geometry: g.maps.geometry, g };
 }
 
 // Haversine distance in meters
