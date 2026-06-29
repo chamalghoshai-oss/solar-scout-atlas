@@ -130,8 +130,7 @@ function LiveRun() {
   }, []);
 
   async function loadExistingLeads(map: google.maps.Map) {
-    const device = getDeviceId();
-    const { data } = await supabase.from("leads").select("id,lat,lng,type,status,name").eq("device_id", device);
+    const { data } = await supabase.from("leads").select("id,lat,lng,type,status,name");
     if (!data) return;
     const { g } = await loadMaps();
     for (const l of data) {
@@ -212,8 +211,8 @@ function LiveRun() {
       toast.error(isGeoError(err) ? locationMessage(err) : err instanceof Error ? err.message : "Location unavailable");
       return;
     }
-    const device = getDeviceId();
-    const { data, error } = await supabase.from("runs").insert({ device_id: device }).select("id").single();
+    const uid = (await supabase.auth.getSession()).data.session?.user?.id ?? null;
+    const { data, error } = await supabase.from("runs").insert({ device_id: getDeviceId(), user_id: uid }).select("id").single();
     if (error || !data) {
       toast.error("Could not start run");
       return;
@@ -260,6 +259,7 @@ function LiveRun() {
     await supabase.from("run_points").insert({
       run_id: rid,
       device_id: getDeviceId(),
+      user_id: (await supabase.auth.getSession()).data.session?.user?.id ?? null,
       lat: c.lat,
       lng: c.lng,
       accuracy: pos.coords.accuracy ?? null,

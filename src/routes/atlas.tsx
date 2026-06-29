@@ -74,11 +74,10 @@ function AtlasPage() {
   }, []);
 
   async function draw(map: google.maps.Map) {
-    const device = getDeviceId();
     const [runsR, pointsR, leadsR] = await Promise.all([
-      supabase.from("runs").select("id,distance_m").eq("device_id", device),
-      supabase.from("run_points").select("run_id,lat,lng,ts").eq("device_id", device).order("ts", { ascending: true }).limit(20000),
-      supabase.from("leads").select("id,lat,lng,type,status,name").eq("device_id", device),
+      supabase.from("runs").select("id,distance_m"),
+      supabase.from("run_points").select("run_id,lat,lng,ts").order("ts", { ascending: true }).limit(20000),
+      supabase.from("leads").select("id,lat,lng,type,status,name"),
     ]);
 
     const runs = runsR.data ?? [];
