@@ -49,7 +49,6 @@ function LeadsList() {
       const { data } = await supabase
         .from("leads")
         .select("id,name,phone,required_kw,notes,lat,lng,status,type,created_at")
-        .eq("device_id", getDeviceId())
         .order("created_at", { ascending: false });
       setLeads((data as Lead[]) ?? []);
       setLoading(false);

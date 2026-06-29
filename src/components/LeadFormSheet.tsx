@@ -84,6 +84,7 @@ export function LeadFormSheet({
     try {
       const payload = {
         device_id: getDeviceId(),
+        user_id: (await supabase.auth.getSession()).data.session?.user?.id ?? null,
         type: draft.type,
         lat: draft.lat,
         lng: draft.lng,
