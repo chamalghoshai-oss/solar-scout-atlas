@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as LeadsRouteImport } from './routes/leads'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AtlasRouteImport } from './routes/atlas'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LeadsIdRouteImport } from './routes/leads.$id'
@@ -23,6 +24,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const LeadsRoute = LeadsRouteImport.update({
   id: '/leads',
   path: '/leads',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AtlasRoute = AtlasRouteImport.update({
@@ -44,6 +50,7 @@ const LeadsIdRoute = LeadsIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/atlas': typeof AtlasRoute
+  '/auth': typeof AuthRoute
   '/leads': typeof LeadsRouteWithChildren
   '/settings': typeof SettingsRoute
   '/leads/$id': typeof LeadsIdRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/atlas': typeof AtlasRoute
+  '/auth': typeof AuthRoute
   '/leads': typeof LeadsRouteWithChildren
   '/settings': typeof SettingsRoute
   '/leads/$id': typeof LeadsIdRoute
@@ -59,21 +67,30 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/atlas': typeof AtlasRoute
+  '/auth': typeof AuthRoute
   '/leads': typeof LeadsRouteWithChildren
   '/settings': typeof SettingsRoute
   '/leads/$id': typeof LeadsIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/atlas' | '/leads' | '/settings' | '/leads/$id'
+  fullPaths: '/' | '/atlas' | '/auth' | '/leads' | '/settings' | '/leads/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/atlas' | '/leads' | '/settings' | '/leads/$id'
-  id: '__root__' | '/' | '/atlas' | '/leads' | '/settings' | '/leads/$id'
+  to: '/' | '/atlas' | '/auth' | '/leads' | '/settings' | '/leads/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/atlas'
+    | '/auth'
+    | '/leads'
+    | '/settings'
+    | '/leads/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AtlasRoute: typeof AtlasRoute
+  AuthRoute: typeof AuthRoute
   LeadsRoute: typeof LeadsRouteWithChildren
   SettingsRoute: typeof SettingsRoute
 }
@@ -92,6 +109,13 @@ declare module '@tanstack/react-router' {
       path: '/leads'
       fullPath: '/leads'
       preLoaderRoute: typeof LeadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/atlas': {
@@ -131,6 +155,7 @@ const LeadsRouteWithChildren = LeadsRoute._addFileChildren(LeadsRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AtlasRoute: AtlasRoute,
+  AuthRoute: AuthRoute,
   LeadsRoute: LeadsRouteWithChildren,
   SettingsRoute: SettingsRoute,
 }
