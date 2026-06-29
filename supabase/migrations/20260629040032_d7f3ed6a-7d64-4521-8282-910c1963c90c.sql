@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS settings_user_id_unique ON public.settings(user_id) WHERE user_id IS NOT NULL;
