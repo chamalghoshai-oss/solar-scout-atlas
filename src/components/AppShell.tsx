@@ -28,12 +28,12 @@ export function AppShell({ children, fullBleed = false }: { children: ReactNode;
             <Shield className={cn("h-3.5 w-3.5", auth.isAdmin ? "text-primary" : "")} />
             <span className="truncate">{auth.fullName || auth.email}</span>
             <span className={cn("rounded-full border px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide", auth.isAdmin ? "border-primary/40 text-primary" : "border-border text-muted-foreground")}>
-              {auth.isAdmin ? "admin" : "surveyor"}
+              {auth.isAdmin ? "owner" : "team"}
             </span>
           </div>
           <div className="flex items-center gap-2">
             {auth.isAdmin && (
-              <Link to="/admin/users" className="rounded px-1.5 py-0.5 text-muted-foreground hover:text-foreground">Users</Link>
+              <Link to="/admin/users" className="rounded px-1.5 py-0.5 text-muted-foreground hover:text-foreground">Access</Link>
             )}
             <button onClick={signOut} className="flex items-center gap-1 text-muted-foreground hover:text-foreground">
               <LogOut className="h-3.5 w-3.5" /> Sign out

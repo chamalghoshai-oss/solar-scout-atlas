@@ -114,7 +114,7 @@ function SettingsPage() {
       </section>
 
       <p className="mt-6 px-1 text-center text-[11px] text-muted-foreground">
-        Single-user mode · data stored on this device.
+        Owner-managed access · data synced to your field account.
       </p>
     </AppShell>
   );

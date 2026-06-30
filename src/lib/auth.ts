@@ -22,6 +22,7 @@ export type AuthState = {
   fullName: string | null;
   roles: AppRole[];
   isAdmin: boolean;
+  canTrackPhone: boolean;
 };
 
 export function useAuth(): AuthState {
@@ -32,18 +33,20 @@ export function useAuth(): AuthState {
     fullName: null,
     roles: [],
     isAdmin: false,
+    canTrackPhone: false,
   });
 
   useEffect(() => {
     let active = true;
     async function hydrate(uid: string | null, email: string | null) {
       if (!uid) {
-        if (active) setState({ loading: false, userId: null, email: null, fullName: null, roles: [], isAdmin: false });
+        if (active) setState({ loading: false, userId: null, email: null, fullName: null, roles: [], isAdmin: false, canTrackPhone: false });
         return;
       }
-      const [rolesRes, profRes] = await Promise.all([
+      const [rolesRes, profRes, accessRes] = await Promise.all([
         supabase.from("user_roles").select("role").eq("user_id", uid),
         supabase.from("profiles").select("full_name").eq("id", uid).maybeSingle(),
+        email ? supabase.from("authorized_emails").select("track_phone").eq("email", email.toLowerCase()).maybeSingle() : Promise.resolve({ data: null }),
       ]);
       if (!active) return;
       const roles = (rolesRes.data ?? []).map((r) => r.role as AppRole);
@@ -54,6 +57,7 @@ export function useAuth(): AuthState {
         fullName: (profRes.data?.full_name as string | undefined) ?? null,
         roles,
         isAdmin: roles.includes("admin"),
+        canTrackPhone: accessRes.data?.track_phone ?? roles.includes("admin"),
       });
     }
     supabase.auth.getSession().then(({ data }) => {
