@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { snapToRoads } from "@/lib/roads.functions";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -38,6 +39,7 @@ function LiveRun() {
   const distanceRef = useRef(0);
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef(false);
+  const auth = useAuth();
 
   const [ready, setReady] = useState(false);
   const [running, setRunning] = useState(false);
@@ -204,6 +206,10 @@ function LiveRun() {
   }
 
   async function startRun() {
+    if (!auth.canTrackPhone) {
+      toast.error("Phone tracking is off for this email.");
+      return;
+    }
     let firstPos: GeolocationPosition;
     try {
       firstPos = await getCurrentPosition();
@@ -364,7 +370,7 @@ function LiveRun() {
       <div className="absolute inset-x-0 bottom-24 z-10 flex justify-center px-4">
         {!running ? (
           <Button size="lg" className="h-14 w-full max-w-sm rounded-full text-base font-semibold shadow-lg" onClick={startRun}>
-            <Play className="mr-2 h-5 w-5" /> Start Marketing Run
+            <Play className="mr-2 h-5 w-5" /> {auth.canTrackPhone ? "Start Marketing Run" : "Tracking Off"}
           </Button>
         ) : (
           <Button size="lg" variant="destructive" className="h-14 w-full max-w-sm rounded-full text-base font-semibold shadow-lg" onClick={stopRun}>
