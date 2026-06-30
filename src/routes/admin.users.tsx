@@ -12,7 +12,7 @@ import { Loader2, MailPlus, Shield, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/users")({
-  head: () => ({ meta: [{ title: "Users — VertX Field" }] }),
+  head: () => ({ meta: [{ title: "Owner Access — VertX Field" }] }),
   component: AdminUsers,
 });
 
