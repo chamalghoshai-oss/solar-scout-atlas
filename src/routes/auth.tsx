@@ -25,10 +25,23 @@ function AuthPage() {
     setBusy(true);
     try {
       const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
+      if (r.redirected) return; // full-page redirect in progress
+      // Popup/web_message flow: verify session before treating as failure.
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        navigate({ to: "/" });
+        return;
+      }
       if (r.error) throw r.error;
-      if (!r.redirected) navigate({ to: "/" });
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Google sign-in failed");
+      const msg = e instanceof Error ? e.message : String(e);
+      // Suppress benign "cancelled" when the session actually landed.
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        navigate({ to: "/" });
+        return;
+      }
+      toast.error(msg || "Google sign-in failed");
     } finally {
       setBusy(false);
     }
