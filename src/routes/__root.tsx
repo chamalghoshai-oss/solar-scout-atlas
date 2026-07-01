@@ -6,15 +6,12 @@ import {
   useRouter,
   HeadContent,
   Scripts,
-  useRouterState,
-  useNavigate,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
-import { supabase } from "@/integrations/supabase/client";
 
 function NotFoundComponent() {
   return (
@@ -122,31 +119,9 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthGate />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
       <Toaster position="top-center" richColors />
     </QueryClientProvider>
   );
-}
-
-function AuthGate() {
-  const navigate = useNavigate();
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  useEffect(() => {
-    let active = true;
-    function evaluate(hasSession: boolean) {
-      if (!active) return;
-      const onAuth = pathname.startsWith("/auth");
-      if (!hasSession && !onAuth) navigate({ to: "/auth", replace: true });
-      if (hasSession && onAuth) navigate({ to: "/", replace: true });
-    }
-    supabase.auth.getSession().then(({ data }) => evaluate(!!data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => evaluate(!!session));
-    return () => {
-      active = false;
-      sub.subscription.unsubscribe();
-    };
-  }, [pathname, navigate]);
-  return null;
 }
