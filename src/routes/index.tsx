@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { LeadFormSheet, type LeadDraft } from "@/components/LeadFormSheet";
-import { Loader2, Play, Square, Crosshair, Plus, Sun } from "lucide-react";
+import { Loader2, Play, Square, Crosshair, Plus, Sun, MapPin, X } from "lucide-react";
 import { loadMaps, distM } from "@/lib/gmaps";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
@@ -38,7 +38,8 @@ function LiveRun() {
   const lastPointRef = useRef<{ lat: number; lng: number } | null>(null);
   const distanceRef = useRef(0);
   const longPressTimer = useRef<number | null>(null);
-  const longPressFired = useRef(false);
+  const longPressStart = useRef<{ x: number; y: number } | null>(null);
+  const pinMarkerRef = useRef<google.maps.Marker | null>(null);
   const auth = useAuth();
 
   const [ready, setReady] = useState(false);
@@ -47,10 +48,37 @@ function LiveRun() {
   const [distance, setDistance] = useState(0);
   const [draft, setDraft] = useState<LeadDraft | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [pendingPin, setPendingPin] = useState<{ lat: number; lng: number } | null>(null);
 
   const openDraft = useCallback((lat: number, lng: number, type: "lead" | "potential") => {
     setDraft({ lat, lng, type });
     setSheetOpen(true);
+  }, []);
+
+  const clearPin = useCallback(() => {
+    pinMarkerRef.current?.setMap(null);
+    pinMarkerRef.current = null;
+    setPendingPin(null);
+  }, []);
+
+  const dropPin = useCallback(async (lat: number, lng: number) => {
+    const { g } = await loadMaps();
+    if (!mapRef.current) return;
+    if (pinMarkerRef.current) pinMarkerRef.current.setMap(null);
+    const m = new g.maps.Marker({
+      position: { lat, lng },
+      map: mapRef.current,
+      draggable: true,
+      animation: g.maps.Animation.DROP,
+      zIndex: 1000,
+    });
+    m.addListener("dragend", () => {
+      const p = m.getPosition();
+      if (p) setPendingPin({ lat: p.lat(), lng: p.lng() });
+    });
+    pinMarkerRef.current = m;
+    setPendingPin({ lat, lng });
+    navigator.vibrate?.(40);
   }, []);
 
   // init map
@@ -86,34 +114,63 @@ function LiveRun() {
           strokeWeight: 2,
           map,
         });
-        // map clicks → quick lead
-        map.addListener("click", (e: google.maps.MapMouseEvent) => {
-          if (longPressFired.current) {
-            longPressFired.current = false;
-            return;
-          }
-          if (!e.latLng) return;
-          openDraft(e.latLng.lat(), e.latLng.lng(), "lead");
-        });
-        // long-press → potential
+        // long-press (single finger) → drop a draggable pin the user can reposition
         const div = mapEl.current;
-        const start_lp = () => {
-          longPressFired.current = false;
-          longPressTimer.current = window.setTimeout(() => {
-            longPressFired.current = true;
-            const c = map.getCenter();
-            if (c) openDraft(c.lat(), c.lng(), "potential");
-            navigator.vibrate?.(40);
-          }, 700);
-        };
         const cancel_lp = () => {
           if (longPressTimer.current) window.clearTimeout(longPressTimer.current);
           longPressTimer.current = null;
+          longPressStart.current = null;
         };
-        div.addEventListener("touchstart", start_lp, { passive: true });
+        const dropAt = (clientX: number, clientY: number) => {
+          const rect = div.getBoundingClientRect();
+          const proj = map.getProjection();
+          const bounds = map.getBounds();
+          if (!proj || !bounds) return;
+          const ne = proj.fromLatLngToPoint(bounds.getNorthEast());
+          const sw = proj.fromLatLngToPoint(bounds.getSouthWest());
+          if (!ne || !sw) return;
+          const scale = Math.pow(2, map.getZoom() ?? 0);
+          const worldX = sw.x + ((clientX - rect.left) / rect.width) * (ne.x - sw.x);
+          const worldY = ne.y + ((clientY - rect.top) / rect.height) * (sw.y - ne.y);
+          const ll = proj.fromPointToLatLng(new google.maps.Point(worldX, worldY));
+          if (!ll) return;
+          void dropPin(ll.lat(), ll.lng());
+        };
+        div.addEventListener("touchstart", (e) => {
+          if (e.touches.length !== 1) {
+            cancel_lp();
+            return;
+          }
+          const t = e.touches[0];
+          longPressStart.current = { x: t.clientX, y: t.clientY };
+          longPressTimer.current = window.setTimeout(() => {
+            const s = longPressStart.current;
+            if (s) dropAt(s.x, s.y);
+            cancel_lp();
+          }, 550);
+        }, { passive: true });
+        div.addEventListener("touchmove", (e) => {
+          if (e.touches.length > 1) { cancel_lp(); return; }
+          const s = longPressStart.current;
+          if (!s) return;
+          const t = e.touches[0];
+          if (Math.hypot(t.clientX - s.x, t.clientY - s.y) > 10) cancel_lp();
+        }, { passive: true });
         div.addEventListener("touchend", cancel_lp);
-        div.addEventListener("touchmove", cancel_lp);
-        div.addEventListener("mousedown", start_lp);
+        div.addEventListener("touchcancel", cancel_lp);
+        div.addEventListener("mousedown", (e) => {
+          longPressStart.current = { x: e.clientX, y: e.clientY };
+          longPressTimer.current = window.setTimeout(() => {
+            const s = longPressStart.current;
+            if (s) dropAt(s.x, s.y);
+            cancel_lp();
+          }, 550);
+        });
+        div.addEventListener("mousemove", (e) => {
+          const s = longPressStart.current;
+          if (!s) return;
+          if (Math.hypot(e.clientX - s.x, e.clientY - s.y) > 10) cancel_lp();
+        });
         div.addEventListener("mouseup", cancel_lp);
         div.addEventListener("mouseleave", cancel_lp);
 
@@ -210,13 +267,6 @@ function LiveRun() {
       toast.error("Phone tracking is off for this email.");
       return;
     }
-    let firstPos: GeolocationPosition;
-    try {
-      firstPos = await getCurrentPosition();
-    } catch (err) {
-      toast.error(isGeoError(err) ? locationMessage(err) : err instanceof Error ? err.message : "Location unavailable");
-      return;
-    }
     const uid = (await supabase.auth.getSession()).data.session?.user?.id ?? null;
     const { data, error } = await supabase.from("runs").insert({ device_id: getDeviceId(), user_id: uid }).select("id").single();
     if (error || !data) {
@@ -234,7 +284,12 @@ function LiveRun() {
     setDistance(0);
     setRunning(true);
     toast.success("Run started");
-    onPosition(firstPos);
+    try {
+      const firstPos = await getCurrentPosition();
+      onPosition(firstPos);
+    } catch {
+      // no initial fix — watchPosition will report errors as they occur
+    }
     watchIdRef.current = navigator.geolocation.watchPosition(
       onPosition,
       (err) => toast.error(locationMessage(err)),
@@ -380,8 +435,28 @@ function LiveRun() {
       </div>
 
       <p className="pointer-events-none absolute bottom-44 left-1/2 z-10 -translate-x-1/2 rounded-full bg-background/80 px-3 py-1 text-[11px] text-muted-foreground backdrop-blur">
-        Tap map for a lead · long-press for a potential house
+        Long-press to drop a pin, drag to place it exactly
       </p>
+
+      {pendingPin && (
+        <div className="absolute inset-x-0 bottom-40 z-20 flex justify-center px-4">
+          <div className="pointer-events-auto flex w-full max-w-sm items-center gap-2 rounded-2xl border border-border bg-background/95 p-2 shadow-lg backdrop-blur">
+            <div className="flex flex-1 items-center gap-2 pl-2 text-xs text-muted-foreground">
+              <MapPin className="h-4 w-4 text-primary" />
+              Drag the pin to place it
+            </div>
+            <Button size="sm" variant="ghost" onClick={clearPin} aria-label="Cancel pin">
+              <X className="h-4 w-4" />
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => { if (pendingPin) { openDraft(pendingPin.lat, pendingPin.lng, "potential"); clearPin(); } }}>
+              Potential
+            </Button>
+            <Button size="sm" onClick={() => { if (pendingPin) { openDraft(pendingPin.lat, pendingPin.lng, "lead"); clearPin(); } }}>
+              Lead
+            </Button>
+          </div>
+        </div>
+      )}
 
       <LeadFormSheet
         open={sheetOpen}
