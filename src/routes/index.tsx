@@ -9,7 +9,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { snapToRoads } from "@/lib/roads.functions";
 import { toast } from "sonner";
-import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -40,7 +39,6 @@ function LiveRun() {
   const longPressTimer = useRef<number | null>(null);
   const longPressStart = useRef<{ x: number; y: number } | null>(null);
   const pinMarkerRef = useRef<google.maps.Marker | null>(null);
-  const auth = useAuth();
 
   const [ready, setReady] = useState(false);
   const [running, setRunning] = useState(false);
@@ -263,10 +261,6 @@ function LiveRun() {
   }
 
   async function startRun() {
-    if (!auth.canTrackPhone) {
-      toast.error("Phone tracking is off for this email.");
-      return;
-    }
     const uid = (await supabase.auth.getSession()).data.session?.user?.id ?? null;
     const { data, error } = await supabase.from("runs").insert({ device_id: getDeviceId(), user_id: uid }).select("id").single();
     if (error || !data) {
@@ -425,7 +419,7 @@ function LiveRun() {
       <div className="absolute inset-x-0 bottom-24 z-10 flex justify-center px-4">
         {!running ? (
           <Button size="lg" className="h-14 w-full max-w-sm rounded-full text-base font-semibold shadow-lg" onClick={startRun}>
-            <Play className="mr-2 h-5 w-5" /> {auth.canTrackPhone ? "Start Marketing Run" : "Tracking Off"}
+            <Play className="mr-2 h-5 w-5" /> Start Marketing Run
           </Button>
         ) : (
           <Button size="lg" variant="destructive" className="h-14 w-full max-w-sm rounded-full text-base font-semibold shadow-lg" onClick={stopRun}>

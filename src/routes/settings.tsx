@@ -37,7 +37,7 @@ function SettingsPage() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from("settings").select("*").maybeSingle();
+      const { data } = await supabase.from("settings").select("*").eq("device_id", getDeviceId()).maybeSingle();
       if (data) {
         setSender(data.sender_name);
         setCompany(data.company_name);
@@ -55,14 +55,12 @@ function SettingsPage() {
   async function save() {
     setSaving(true);
     const device = getDeviceId();
-    const uid = (await supabase.auth.getSession()).data.session?.user?.id ?? null;
     const { error } = await supabase.from("settings").upsert({
       device_id: device,
-      user_id: uid,
       sender_name: sender.trim() || "Aureon",
       company_name: company.trim() || "VertX Energies",
       whatsapp_template: template.trim() || DEFAULT_TEMPLATE,
-    }, { onConflict: "user_id" });
+    }, { onConflict: "device_id" });
     setSaving(false);
     if (error) toast.error(error.message);
     else toast.success("Saved");
