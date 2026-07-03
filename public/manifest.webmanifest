@@ -2,13 +2,18 @@
   "name": "VertX Field — Solar Survey",
   "short_name": "VertX Field",
   "description": "Track field marketing runs and capture solar leads.",
+  "id": "/",
+  "lang": "en",
+  "dir": "ltr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0b0b0c",
   "theme_color": "#ea7a1d",
+  "categories": ["business", "productivity", "utilities"],
   "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
