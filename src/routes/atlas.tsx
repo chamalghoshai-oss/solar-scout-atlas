@@ -4,10 +4,11 @@ import { AppShell } from "@/components/AppShell";
 import { loadMaps, cellKey } from "@/lib/gmaps";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
-import { Loader2, Layers, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, Layers, ChevronDown, ChevronUp, PenLine, Trash2, Check, X } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/atlas")({
   head: () => ({
@@ -26,11 +27,20 @@ function AtlasPage() {
   const mapRef = useRef<google.maps.Map | null>(null);
   const navigate = useNavigate();
   const layersRef = useRef<{
-    runLines: google.maps.Polyline[];
+    runLines: { runId: string; line: google.maps.Polyline }[];
     heatMarkers: google.maps.Marker[];
     leadMarkers: { marker: google.maps.Marker; status: string; type: string }[];
     potentialMarkers: google.maps.Marker[];
   }>({ runLines: [], heatMarkers: [], leadMarkers: [], potentialMarkers: [] });
+
+  // Manual route builder state
+  const buildLineRef = useRef<google.maps.Polyline | null>(null);
+  const buildMarkersRef = useRef<google.maps.Marker[]>([]);
+  const buildPointsRef = useRef<Array<{ lat: number; lng: number }>>([]);
+  const clickListenerRef = useRef<google.maps.MapsEventListener | null>(null);
+  const [buildMode, setBuildMode] = useState(false);
+  const [buildCount, setBuildCount] = useState(0);
+  const [saving, setSaving] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [showRuns, setShowRuns] = useState(true);
@@ -73,6 +83,17 @@ function AtlasPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function clearRunLayers() {
+    layersRef.current.runLines.forEach(({ line }) => line.setMap(null));
+    layersRef.current.heatMarkers.forEach((m) => m.setMap(null));
+    layersRef.current.leadMarkers.forEach(({ marker }) => marker.setMap(null));
+    layersRef.current.potentialMarkers.forEach((m) => m.setMap(null));
+    layersRef.current.runLines = [];
+    layersRef.current.heatMarkers = [];
+    layersRef.current.leadMarkers = [];
+    layersRef.current.potentialMarkers = [];
+  }
+
   async function draw(map: google.maps.Map) {
     const [runsR, pointsR, leadsR] = await Promise.all([
       supabase.from("runs").select("id,distance_m"),
@@ -95,7 +116,7 @@ function AtlasPage() {
     // polylines per run
     const { g } = await loadMaps();
     const bounds = new g.maps.LatLngBounds();
-    for (const [, path] of byRun) {
+    for (const [runId, path] of byRun) {
       if (path.length < 2) continue;
       const line = new g.maps.Polyline({
         path,
@@ -103,8 +124,13 @@ function AtlasPage() {
         strokeOpacity: 0.55,
         strokeWeight: 4,
         map,
+        clickable: true,
       });
-      layersRef.current.runLines.push(line);
+      line.addListener("click", (e: google.maps.PolyMouseEvent) => {
+        if (buildMode) return;
+        promptDeleteRun(runId, e?.latLng ?? undefined);
+      });
+      layersRef.current.runLines.push({ runId, line });
       path.forEach((pt) => bounds.extend(pt));
     }
 
@@ -171,8 +197,172 @@ function AtlasPage() {
     });
   }
 
+  async function refresh() {
+    if (!mapRef.current) return;
+    clearRunLayers();
+    await draw(mapRef.current);
+  }
+
+  async function promptDeleteRun(runId: string, at?: google.maps.LatLng) {
+    void at;
+    if (!confirm("Delete this route trail? This cannot be undone.")) return;
+    const { error } = await supabase.from("runs").delete().eq("id", runId);
+    if (error) {
+      toast.error("Could not delete route", { description: error.message });
+      return;
+    }
+    toast.success("Route deleted");
+    await refresh();
+  }
+
+  // Manual route builder
+  async function enterBuildMode() {
+    if (!mapRef.current) return;
+    const { g } = await loadMaps();
+    setBuildMode(true);
+    buildPointsRef.current = [];
+    setBuildCount(0);
+    buildLineRef.current = new g.maps.Polyline({
+      path: [],
+      strokeColor: "#2563eb",
+      strokeOpacity: 0.9,
+      strokeWeight: 5,
+      map: mapRef.current,
+      zIndex: 500,
+    });
+    clickListenerRef.current = mapRef.current.addListener("click", (e: google.maps.MapMouseEvent) => {
+      if (!e.latLng || !mapRef.current) return;
+      const pt = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+      buildPointsRef.current.push(pt);
+      buildLineRef.current?.getPath().push(new g.maps.LatLng(pt.lat, pt.lng));
+      const idx = buildPointsRef.current.length;
+      const m = new g.maps.Marker({
+        position: pt,
+        map: mapRef.current,
+        draggable: true,
+        icon: {
+          path: g.maps.SymbolPath.CIRCLE,
+          scale: 5,
+          fillColor: "#2563eb",
+          fillOpacity: 1,
+          strokeColor: "#ffffff",
+          strokeWeight: 2,
+        },
+        zIndex: 600,
+      });
+      const localIdx = idx - 1;
+      m.addListener("dragend", () => {
+        const p = m.getPosition();
+        if (!p) return;
+        buildPointsRef.current[localIdx] = { lat: p.lat(), lng: p.lng() };
+        const path = buildLineRef.current?.getPath();
+        path?.setAt(localIdx, p);
+      });
+      m.addListener("rightclick", () => removeBuildPoint(localIdx));
+      buildMarkersRef.current.push(m);
+      setBuildCount(buildPointsRef.current.length);
+    });
+    toast("Tap map to add points. Long-press a point to remove.");
+  }
+
+  function removeBuildPoint(idx: number) {
+    const m = buildMarkersRef.current[idx];
+    if (!m) return;
+    m.setMap(null);
+    buildMarkersRef.current.splice(idx, 1);
+    buildPointsRef.current.splice(idx, 1);
+    // rebuild polyline path
+    const path = buildLineRef.current?.getPath();
+    if (path) {
+      path.clear();
+      buildPointsRef.current.forEach((p) => path.push(new google.maps.LatLng(p.lat, p.lng)));
+    }
+    setBuildCount(buildPointsRef.current.length);
+  }
+
+  function undoBuildPoint() {
+    if (buildPointsRef.current.length === 0) return;
+    removeBuildPoint(buildPointsRef.current.length - 1);
+  }
+
+  function cancelBuildMode() {
+    clickListenerRef.current?.remove();
+    clickListenerRef.current = null;
+    buildLineRef.current?.setMap(null);
+    buildLineRef.current = null;
+    buildMarkersRef.current.forEach((m) => m.setMap(null));
+    buildMarkersRef.current = [];
+    buildPointsRef.current = [];
+    setBuildCount(0);
+    setBuildMode(false);
+  }
+
+  async function saveBuildRoute() {
+    if (buildPointsRef.current.length < 2) {
+      toast.error("Add at least 2 points");
+      return;
+    }
+    setSaving(true);
+    try {
+      const deviceId = getDeviceId();
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id ?? null;
+
+      // distance
+      let dist = 0;
+      const pts = buildPointsRef.current;
+      for (let i = 1; i < pts.length; i++) {
+        dist += haversine(pts[i - 1], pts[i]);
+      }
+
+      const { data: runIns, error: runErr } = await supabase
+        .from("runs")
+        .insert({ device_id: deviceId, user_id: userId, distance_m: Math.round(dist), ended_at: new Date().toISOString() })
+        .select("id")
+        .single();
+      if (runErr || !runIns) throw runErr ?? new Error("Failed to create run");
+
+      const baseTs = Date.now();
+      const rows = pts.map((p, i) => ({
+        run_id: runIns.id,
+        device_id: deviceId,
+        user_id: userId,
+        lat: p.lat,
+        lng: p.lng,
+        ts: new Date(baseTs + i * 1000).toISOString(),
+      }));
+      const { error: ptsErr } = await supabase.from("run_points").insert(rows);
+      if (ptsErr) throw ptsErr;
+
+      toast.success("Route saved");
+      cancelBuildMode();
+      await refresh();
+    } catch (err) {
+      toast.error("Could not save route", { description: (err as Error).message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteAllRoutes() {
+    const n = layersRef.current.runLines.length;
+    if (n === 0) {
+      toast("No route trails to delete");
+      return;
+    }
+    if (!confirm(`Delete ALL ${n} route trails? This cannot be undone.`)) return;
+    const ids = layersRef.current.runLines.map((r) => r.runId);
+    const { error } = await supabase.from("runs").delete().in("id", ids);
+    if (error) {
+      toast.error("Could not delete trails", { description: error.message });
+      return;
+    }
+    toast.success(`${n} trails deleted`);
+    await refresh();
+  }
+
   useEffect(() => {
-    layersRef.current.runLines.forEach((p) => p.setMap(showRuns ? mapRef.current : null));
+    layersRef.current.runLines.forEach(({ line }) => line.setMap(showRuns ? mapRef.current : null));
   }, [showRuns]);
   useEffect(() => {
     layersRef.current.heatMarkers.forEach((m) => m.setMap(showHeat ? mapRef.current : null));
@@ -208,7 +398,30 @@ function AtlasPage() {
       </div>
 
       <div className="absolute bottom-24 left-4 right-4 z-10 mx-auto max-w-md">
-        {panelOpen ? (
+        {buildMode ? (
+          <div className="rounded-2xl border border-border bg-background/95 p-3 shadow-sm backdrop-blur">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-xs font-medium text-muted-foreground">
+                BUILDING ROUTE — {buildCount} point{buildCount === 1 ? "" : "s"}
+              </div>
+            </div>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Tap the map to add points. Drag a point to move it. Right-click / long-press a point to remove.
+            </p>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" className="flex-1" onClick={undoBuildPoint} disabled={buildCount === 0 || saving}>
+                Undo
+              </Button>
+              <Button size="sm" variant="outline" className="flex-1" onClick={cancelBuildMode} disabled={saving}>
+                <X className="mr-1 h-3.5 w-3.5" /> Cancel
+              </Button>
+              <Button size="sm" className="flex-1" onClick={saveBuildRoute} disabled={buildCount < 2 || saving}>
+                {saving ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Check className="mr-1 h-3.5 w-3.5" />}
+                Save
+              </Button>
+            </div>
+          </div>
+        ) : panelOpen ? (
           <div className="rounded-2xl border border-border bg-background/95 p-3 shadow-sm backdrop-blur">
             <div className="mb-2 flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
@@ -235,6 +448,17 @@ function AtlasPage() {
               <Toggle id="s-ni" checked={statusFilter.not_interested} onChange={(v) => setStatusFilter((s) => ({ ...s, not_interested: v }))} label="Not interested" dot="#6b7280" />
               <Toggle id="s-other" checked={statusFilter.other} onChange={(v) => setStatusFilter((s) => ({ ...s, other: v }))} label="Other" dot="#9ca3af" />
             </div>
+            <div className="mt-3 flex gap-2">
+              <Button size="sm" variant="secondary" className="flex-1" onClick={enterBuildMode}>
+                <PenLine className="mr-1 h-3.5 w-3.5" /> Build route
+              </Button>
+              <Button size="sm" variant="outline" className="flex-1 text-destructive hover:text-destructive" onClick={deleteAllRoutes}>
+                <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete all trails
+              </Button>
+            </div>
+            <p className="mt-2 text-[10px] text-muted-foreground">
+              Tip: tap any orange route trail on the map to delete just that one.
+            </p>
           </div>
         ) : (
           <div className="flex justify-end">
@@ -247,6 +471,17 @@ function AtlasPage() {
       </div>
     </AppShell>
   );
+}
+
+function haversine(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371000;
+  const toRad = (x: number) => (x * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
 }
 
 function Stat({ n, l }: { n: string | number; l: string }) {
