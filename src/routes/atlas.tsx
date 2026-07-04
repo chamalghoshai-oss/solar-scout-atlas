@@ -38,6 +38,7 @@ function AtlasPage() {
   const buildMarkersRef = useRef<google.maps.Marker[]>([]);
   const buildPointsRef = useRef<Array<{ lat: number; lng: number }>>([]);
   const clickListenerRef = useRef<google.maps.MapsEventListener | null>(null);
+  const buildModeRef = useRef(false);
   const [buildMode, setBuildMode] = useState(false);
   const [buildCount, setBuildCount] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -126,9 +127,9 @@ function AtlasPage() {
         map,
         clickable: true,
       });
-      line.addListener("click", (e: google.maps.PolyMouseEvent) => {
-        if (buildMode) return;
-        promptDeleteRun(runId, e?.latLng ?? undefined);
+      line.addListener("click", () => {
+        if (buildModeRef.current) return;
+        promptDeleteRun(runId);
       });
       layersRef.current.runLines.push({ runId, line });
       path.forEach((pt) => bounds.extend(pt));
@@ -203,8 +204,7 @@ function AtlasPage() {
     await draw(mapRef.current);
   }
 
-  async function promptDeleteRun(runId: string, at?: google.maps.LatLng) {
-    void at;
+  async function promptDeleteRun(runId: string) {
     if (!confirm("Delete this route trail? This cannot be undone.")) return;
     const { error } = await supabase.from("runs").delete().eq("id", runId);
     if (error) {
@@ -219,6 +219,7 @@ function AtlasPage() {
   async function enterBuildMode() {
     if (!mapRef.current) return;
     const { g } = await loadMaps();
+    buildModeRef.current = true;
     setBuildMode(true);
     buildPointsRef.current = [];
     setBuildCount(0);
@@ -294,6 +295,7 @@ function AtlasPage() {
     buildMarkersRef.current = [];
     buildPointsRef.current = [];
     setBuildCount(0);
+    buildModeRef.current = false;
     setBuildMode(false);
   }
 
