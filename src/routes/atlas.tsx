@@ -110,7 +110,7 @@ function AtlasPage() {
 
   async function draw(map: google.maps.Map) {
     const [runsR, pointsR, leadsR] = await Promise.all([
-      supabase.from("runs").select("id,distance_m"),
+      supabase.from("runs").select("id,distance_m,started_at,ended_at"),
       supabase.from("run_points").select("run_id,lat,lng,ts").order("ts", { ascending: true }).limit(20000),
       supabase.from("leads").select("id,lat,lng,type,status,name"),
     ]);
@@ -128,10 +128,30 @@ function AtlasPage() {
     }
 
     // polylines per run
-    const { g } = await loadMaps();
+    const { g } = await loadDrawing();
+    const nonPotentialLeads = leads.filter((l) => l.type !== "potential");
+    runsMetaRef.current.clear();
     const bounds = new g.maps.LatLngBounds();
     for (const [runId, path] of byRun) {
       if (path.length < 2) continue;
+      const runRow = runs.find((r) => r.id === runId);
+      // leads-in-route: within ~40m of any run point
+      let leadsInRoute = 0;
+      for (const lead of nonPotentialLeads) {
+        const lp = { lat: Number(lead.lat), lng: Number(lead.lng) };
+        let hit = false;
+        for (const rp of path) {
+          if (haversine(rp, lp) <= 40) { hit = true; break; }
+        }
+        if (hit) leadsInRoute++;
+      }
+      runsMetaRef.current.set(runId, {
+        distanceM: Number(runRow?.distance_m ?? 0),
+        startedAt: (runRow?.started_at as string | null) ?? null,
+        endedAt: (runRow?.ended_at as string | null) ?? null,
+        leadsCount: leadsInRoute,
+        pointsCount: path.length,
+      });
       const line = new g.maps.Polyline({
         path,
         strokeColor: "#ea7a1d",
@@ -140,10 +160,7 @@ function AtlasPage() {
         map,
         clickable: true,
       });
-      line.addListener("click", () => {
-        if (buildModeRef.current) return;
-        promptDeleteRun(runId);
-      });
+      attachRunLineHandlers(runId, line);
       layersRef.current.runLines.push({ runId, line });
       path.forEach((pt) => bounds.extend(pt));
     }
