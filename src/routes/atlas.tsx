@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { loadMaps, cellKey } from "@/lib/gmaps";
+import { loadMaps, loadDrawing, cellKey } from "@/lib/gmaps";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { Loader2, Layers, ChevronDown, ChevronUp, PenLine, Trash2, Check, X } from "lucide-react";
@@ -9,6 +9,8 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
+import { computeRoute } from "@/lib/route.functions";
 
 export const Route = createFileRoute("/atlas")({
   head: () => ({
@@ -37,11 +39,22 @@ function AtlasPage() {
   const buildLineRef = useRef<google.maps.Polyline | null>(null);
   const buildMarkersRef = useRef<google.maps.Marker[]>([]);
   const buildPointsRef = useRef<Array<{ lat: number; lng: number }>>([]);
+  const buildSnappedPathRef = useRef<Array<{ lat: number; lng: number }>>([]);
+  const buildSnapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const buildReqIdRef = useRef(0);
   const clickListenerRef = useRef<google.maps.MapsEventListener | null>(null);
   const buildModeRef = useRef(false);
   const [buildMode, setBuildMode] = useState(false);
   const [buildCount, setBuildCount] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [snapping, setSnapping] = useState(false);
+  const [buildDistanceM, setBuildDistanceM] = useState(0);
+  const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
+  const runsMetaRef = useRef<Map<string, { distanceM: number; startedAt: string | null; endedAt: string | null; leadsCount: number; pointsCount: number }>>(new Map());
+  const computeRouteFn = useServerFn(computeRoute);
+  const pressTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const pressPositionRef = useRef<google.maps.LatLng | null>(null);
+  const pressFiredRef = useRef(false);
 
   const [loading, setLoading] = useState(true);
   const [showRuns, setShowRuns] = useState(true);
@@ -97,7 +110,7 @@ function AtlasPage() {
 
   async function draw(map: google.maps.Map) {
     const [runsR, pointsR, leadsR] = await Promise.all([
-      supabase.from("runs").select("id,distance_m"),
+      supabase.from("runs").select("id,distance_m,started_at,ended_at"),
       supabase.from("run_points").select("run_id,lat,lng,ts").order("ts", { ascending: true }).limit(20000),
       supabase.from("leads").select("id,lat,lng,type,status,name"),
     ]);
@@ -115,10 +128,30 @@ function AtlasPage() {
     }
 
     // polylines per run
-    const { g } = await loadMaps();
+    const { g } = await loadDrawing();
+    const nonPotentialLeads = leads.filter((l) => l.type !== "potential");
+    runsMetaRef.current.clear();
     const bounds = new g.maps.LatLngBounds();
     for (const [runId, path] of byRun) {
       if (path.length < 2) continue;
+      const runRow = runs.find((r) => r.id === runId);
+      // leads-in-route: within ~40m of any run point
+      let leadsInRoute = 0;
+      for (const lead of nonPotentialLeads) {
+        const lp = { lat: Number(lead.lat), lng: Number(lead.lng) };
+        let hit = false;
+        for (const rp of path) {
+          if (haversine(rp, lp) <= 40) { hit = true; break; }
+        }
+        if (hit) leadsInRoute++;
+      }
+      runsMetaRef.current.set(runId, {
+        distanceM: Number(runRow?.distance_m ?? 0),
+        startedAt: (runRow?.started_at as string | null) ?? null,
+        endedAt: (runRow?.ended_at as string | null) ?? null,
+        leadsCount: leadsInRoute,
+        pointsCount: path.length,
+      });
       const line = new g.maps.Polyline({
         path,
         strokeColor: "#ea7a1d",
@@ -127,10 +160,7 @@ function AtlasPage() {
         map,
         clickable: true,
       });
-      line.addListener("click", () => {
-        if (buildModeRef.current) return;
-        promptDeleteRun(runId);
-      });
+      attachRunLineHandlers(runId, line);
       layersRef.current.runLines.push({ runId, line });
       path.forEach((pt) => bounds.extend(pt));
     }
@@ -215,13 +245,74 @@ function AtlasPage() {
     await refresh();
   }
 
+  function showRunInfo(runId: string, at: google.maps.LatLng) {
+    if (!mapRef.current) return;
+    const meta = runsMetaRef.current.get(runId);
+    if (!meta) return;
+    const km = (meta.distanceM / 1000).toFixed(meta.distanceM >= 10000 ? 1 : 2);
+    let durText = "—";
+    if (meta.startedAt && meta.endedAt) {
+      const ms = new Date(meta.endedAt).getTime() - new Date(meta.startedAt).getTime();
+      if (ms > 0 && Number.isFinite(ms)) durText = formatDuration(ms);
+    }
+    const html = `
+      <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; min-width: 180px; padding: 2px 4px;">
+        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #6b7280; margin-bottom: 4px;">Route</div>
+        <div style="display: grid; grid-template-columns: auto auto; gap: 4px 12px; font-size: 13px;">
+          <div style="color:#6b7280;">Length</div><div style="font-weight:600; text-align:right;">${km} km</div>
+          <div style="color:#6b7280;">Leads on route</div><div style="font-weight:600; text-align:right;">${meta.leadsCount}</div>
+          <div style="color:#6b7280;">Time</div><div style="font-weight:600; text-align:right;">${durText}</div>
+          <div style="color:#6b7280;">Points</div><div style="font-weight:600; text-align:right;">${meta.pointsCount}</div>
+        </div>
+        <div style="margin-top:6px; font-size: 11px; color: #9ca3af;">Long-press the route to delete.</div>
+      </div>`;
+    if (!infoWindowRef.current) infoWindowRef.current = new google.maps.InfoWindow();
+    infoWindowRef.current.setContent(html);
+    infoWindowRef.current.setPosition(at);
+    infoWindowRef.current.open({ map: mapRef.current });
+  }
+
+  function attachRunLineHandlers(runId: string, line: google.maps.Polyline) {
+    const LONG_PRESS_MS = 550;
+    line.addListener("mousedown", (e: google.maps.PolyMouseEvent) => {
+      if (buildModeRef.current) return;
+      pressFiredRef.current = false;
+      pressPositionRef.current = e.latLng ?? null;
+      const t = setTimeout(() => {
+        pressFiredRef.current = true;
+        infoWindowRef.current?.close();
+        promptDeleteRun(runId);
+      }, LONG_PRESS_MS);
+      pressTimersRef.current.set(runId, t);
+    });
+    const cancelPress = () => {
+      const t = pressTimersRef.current.get(runId);
+      if (t) {
+        clearTimeout(t);
+        pressTimersRef.current.delete(runId);
+      }
+    };
+    line.addListener("mouseup", () => cancelPress());
+    line.addListener("mouseout", () => cancelPress());
+    line.addListener("click", (e: google.maps.PolyMouseEvent) => {
+      if (buildModeRef.current) return;
+      if (pressFiredRef.current) {
+        pressFiredRef.current = false;
+        return;
+      }
+      if (e.latLng) showRunInfo(runId, e.latLng);
+    });
+  }
+
   // Manual route builder
   async function enterBuildMode() {
     if (!mapRef.current) return;
-    const { g } = await loadMaps();
+    const { g } = await loadDrawing();
     buildModeRef.current = true;
     setBuildMode(true);
     buildPointsRef.current = [];
+    buildSnappedPathRef.current = [];
+    setBuildDistanceM(0);
     setBuildCount(0);
     buildLineRef.current = new g.maps.Polyline({
       path: [],
@@ -235,7 +326,6 @@ function AtlasPage() {
       if (!e.latLng || !mapRef.current) return;
       const pt = { lat: e.latLng.lat(), lng: e.latLng.lng() };
       buildPointsRef.current.push(pt);
-      buildLineRef.current?.getPath().push(new g.maps.LatLng(pt.lat, pt.lng));
       const idx = buildPointsRef.current.length;
       const m = new g.maps.Marker({
         position: pt,
@@ -256,14 +346,61 @@ function AtlasPage() {
         const p = m.getPosition();
         if (!p) return;
         buildPointsRef.current[localIdx] = { lat: p.lat(), lng: p.lng() };
-        const path = buildLineRef.current?.getPath();
-        path?.setAt(localIdx, p);
+        scheduleSnap();
       });
       m.addListener("rightclick", () => removeBuildPoint(localIdx));
       buildMarkersRef.current.push(m);
       setBuildCount(buildPointsRef.current.length);
+      scheduleSnap();
     });
-    toast("Tap map to add points. Long-press a point to remove.");
+    toast("Tap the map to add points — the route will follow real roads.");
+  }
+
+  function scheduleSnap() {
+    if (buildSnapTimerRef.current) clearTimeout(buildSnapTimerRef.current);
+    buildSnapTimerRef.current = setTimeout(() => {
+      void refreshSnappedPath();
+    }, 350);
+  }
+
+  async function refreshSnappedPath() {
+    const pts = buildPointsRef.current;
+    const line = buildLineRef.current;
+    if (!line) return;
+    if (pts.length < 2) {
+      line.setPath(pts.map((p) => new google.maps.LatLng(p.lat, p.lng)));
+      buildSnappedPathRef.current = pts.slice();
+      const d = computePathDistance(pts);
+      setBuildDistanceM(d);
+      return;
+    }
+    const reqId = ++buildReqIdRef.current;
+    setSnapping(true);
+    try {
+      // Routes API supports up to 25 waypoints; sample if needed.
+      const sample = samplePoints(pts, 25);
+      const res = await computeRouteFn({ data: { points: sample, travelMode: "DRIVE" } });
+      if (reqId !== buildReqIdRef.current) return; // stale
+      let snapped: Array<{ lat: number; lng: number }> = [];
+      if (res.encodedPolyline && google.maps.geometry?.encoding) {
+        const decoded = google.maps.geometry.encoding.decodePath(res.encodedPolyline);
+        snapped = decoded.map((ll) => ({ lat: ll.lat(), lng: ll.lng() }));
+      }
+      if (snapped.length < 2) {
+        // fallback: straight lines
+        snapped = pts.slice();
+      }
+      buildSnappedPathRef.current = snapped;
+      line.setPath(snapped.map((p) => new google.maps.LatLng(p.lat, p.lng)));
+      setBuildDistanceM(res.distanceMeters ?? computePathDistance(snapped));
+    } catch {
+      // fallback to straight line
+      buildSnappedPathRef.current = pts.slice();
+      line.setPath(pts.map((p) => new google.maps.LatLng(p.lat, p.lng)));
+      setBuildDistanceM(computePathDistance(pts));
+    } finally {
+      if (reqId === buildReqIdRef.current) setSnapping(false);
+    }
   }
 
   function removeBuildPoint(idx: number) {
@@ -272,13 +409,8 @@ function AtlasPage() {
     m.setMap(null);
     buildMarkersRef.current.splice(idx, 1);
     buildPointsRef.current.splice(idx, 1);
-    // rebuild polyline path
-    const path = buildLineRef.current?.getPath();
-    if (path) {
-      path.clear();
-      buildPointsRef.current.forEach((p) => path.push(new google.maps.LatLng(p.lat, p.lng)));
-    }
     setBuildCount(buildPointsRef.current.length);
+    scheduleSnap();
   }
 
   function undoBuildPoint() {
@@ -287,6 +419,11 @@ function AtlasPage() {
   }
 
   function cancelBuildMode() {
+    if (buildSnapTimerRef.current) {
+      clearTimeout(buildSnapTimerRef.current);
+      buildSnapTimerRef.current = null;
+    }
+    buildReqIdRef.current++;
     clickListenerRef.current?.remove();
     clickListenerRef.current = null;
     buildLineRef.current?.setMap(null);
@@ -294,7 +431,10 @@ function AtlasPage() {
     buildMarkersRef.current.forEach((m) => m.setMap(null));
     buildMarkersRef.current = [];
     buildPointsRef.current = [];
+    buildSnappedPathRef.current = [];
+    setBuildDistanceM(0);
     setBuildCount(0);
+    setSnapping(false);
     buildModeRef.current = false;
     setBuildMode(false);
   }
@@ -310,12 +450,12 @@ function AtlasPage() {
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData.user?.id ?? null;
 
-      // distance
-      let dist = 0;
-      const pts = buildPointsRef.current;
-      for (let i = 1; i < pts.length; i++) {
-        dist += haversine(pts[i - 1], pts[i]);
-      }
+      // Prefer the snapped (road-following) path if available.
+      const pathToSave =
+        buildSnappedPathRef.current.length >= 2
+          ? buildSnappedPathRef.current
+          : buildPointsRef.current;
+      const dist = computePathDistance(pathToSave);
 
       const { data: runIns, error: runErr } = await supabase
         .from("runs")
@@ -325,7 +465,7 @@ function AtlasPage() {
       if (runErr || !runIns) throw runErr ?? new Error("Failed to create run");
 
       const baseTs = Date.now();
-      const rows = pts.map((p, i) => ({
+      const rows = pathToSave.map((p, i) => ({
         run_id: runIns.id,
         device_id: deviceId,
         user_id: userId,
@@ -406,9 +546,16 @@ function AtlasPage() {
               <div className="text-xs font-medium text-muted-foreground">
                 BUILDING ROUTE — {buildCount} point{buildCount === 1 ? "" : "s"}
               </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                {snapping ? (
+                  <span className="flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> snapping…</span>
+                ) : buildDistanceM > 0 ? (
+                  <span className="tabular-nums">{(buildDistanceM / 1000).toFixed(2)} km</span>
+                ) : null}
+              </div>
             </div>
             <p className="mb-3 text-xs text-muted-foreground">
-              Tap the map to add points. Drag a point to move it. Right-click / long-press a point to remove.
+              Tap the map to add points — the route auto-follows real roads between them. Drag a point to adjust.
             </p>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" className="flex-1" onClick={undoBuildPoint} disabled={buildCount === 0 || saving}>
@@ -484,6 +631,29 @@ function haversine(a: { lat: number; lng: number }, b: { lat: number; lng: numbe
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+function computePathDistance(pts: Array<{ lat: number; lng: number }>): number {
+  let d = 0;
+  for (let i = 1; i < pts.length; i++) d += haversine(pts[i - 1], pts[i]);
+  return d;
+}
+
+function samplePoints<T>(arr: T[], max: number): T[] {
+  if (arr.length <= max) return arr;
+  const out: T[] = [];
+  const step = (arr.length - 1) / (max - 1);
+  for (let i = 0; i < max; i++) out.push(arr[Math.round(i * step)]);
+  return out;
+}
+
+function formatDuration(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
 }
 
 function Stat({ n, l }: { n: string | number; l: string }) {
