@@ -546,9 +546,16 @@ function AtlasPage() {
               <div className="text-xs font-medium text-muted-foreground">
                 BUILDING ROUTE — {buildCount} point{buildCount === 1 ? "" : "s"}
               </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                {snapping ? (
+                  <span className="flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> snapping…</span>
+                ) : buildDistanceM > 0 ? (
+                  <span className="tabular-nums">{(buildDistanceM / 1000).toFixed(2)} km</span>
+                ) : null}
+              </div>
             </div>
             <p className="mb-3 text-xs text-muted-foreground">
-              Tap the map to add points. Drag a point to move it. Right-click / long-press a point to remove.
+              Tap the map to add points — the route auto-follows real roads between them. Drag a point to adjust.
             </p>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" className="flex-1" onClick={undoBuildPoint} disabled={buildCount === 0 || saving}>
