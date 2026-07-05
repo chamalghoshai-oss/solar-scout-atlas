@@ -307,10 +307,12 @@ function AtlasPage() {
   // Manual route builder
   async function enterBuildMode() {
     if (!mapRef.current) return;
-    const { g } = await loadMaps();
+    const { g } = await loadDrawing();
     buildModeRef.current = true;
     setBuildMode(true);
     buildPointsRef.current = [];
+    buildSnappedPathRef.current = [];
+    setBuildDistanceM(0);
     setBuildCount(0);
     buildLineRef.current = new g.maps.Polyline({
       path: [],
@@ -324,7 +326,6 @@ function AtlasPage() {
       if (!e.latLng || !mapRef.current) return;
       const pt = { lat: e.latLng.lat(), lng: e.latLng.lng() };
       buildPointsRef.current.push(pt);
-      buildLineRef.current?.getPath().push(new g.maps.LatLng(pt.lat, pt.lng));
       const idx = buildPointsRef.current.length;
       const m = new g.maps.Marker({
         position: pt,
@@ -345,14 +346,61 @@ function AtlasPage() {
         const p = m.getPosition();
         if (!p) return;
         buildPointsRef.current[localIdx] = { lat: p.lat(), lng: p.lng() };
-        const path = buildLineRef.current?.getPath();
-        path?.setAt(localIdx, p);
+        scheduleSnap();
       });
       m.addListener("rightclick", () => removeBuildPoint(localIdx));
       buildMarkersRef.current.push(m);
       setBuildCount(buildPointsRef.current.length);
+      scheduleSnap();
     });
-    toast("Tap map to add points. Long-press a point to remove.");
+    toast("Tap the map to add points — the route will follow real roads.");
+  }
+
+  function scheduleSnap() {
+    if (buildSnapTimerRef.current) clearTimeout(buildSnapTimerRef.current);
+    buildSnapTimerRef.current = setTimeout(() => {
+      void refreshSnappedPath();
+    }, 350);
+  }
+
+  async function refreshSnappedPath() {
+    const pts = buildPointsRef.current;
+    const line = buildLineRef.current;
+    if (!line) return;
+    if (pts.length < 2) {
+      line.setPath(pts.map((p) => new google.maps.LatLng(p.lat, p.lng)));
+      buildSnappedPathRef.current = pts.slice();
+      const d = computePathDistance(pts);
+      setBuildDistanceM(d);
+      return;
+    }
+    const reqId = ++buildReqIdRef.current;
+    setSnapping(true);
+    try {
+      // Routes API supports up to 25 waypoints; sample if needed.
+      const sample = samplePoints(pts, 25);
+      const res = await computeRouteFn({ data: { points: sample, travelMode: "DRIVE" } });
+      if (reqId !== buildReqIdRef.current) return; // stale
+      let snapped: Array<{ lat: number; lng: number }> = [];
+      if (res.encodedPolyline && google.maps.geometry?.encoding) {
+        const decoded = google.maps.geometry.encoding.decodePath(res.encodedPolyline);
+        snapped = decoded.map((ll) => ({ lat: ll.lat(), lng: ll.lng() }));
+      }
+      if (snapped.length < 2) {
+        // fallback: straight lines
+        snapped = pts.slice();
+      }
+      buildSnappedPathRef.current = snapped;
+      line.setPath(snapped.map((p) => new google.maps.LatLng(p.lat, p.lng)));
+      setBuildDistanceM(res.distanceMeters ?? computePathDistance(snapped));
+    } catch {
+      // fallback to straight line
+      buildSnappedPathRef.current = pts.slice();
+      line.setPath(pts.map((p) => new google.maps.LatLng(p.lat, p.lng)));
+      setBuildDistanceM(computePathDistance(pts));
+    } finally {
+      if (reqId === buildReqIdRef.current) setSnapping(false);
+    }
   }
 
   function removeBuildPoint(idx: number) {
@@ -361,13 +409,8 @@ function AtlasPage() {
     m.setMap(null);
     buildMarkersRef.current.splice(idx, 1);
     buildPointsRef.current.splice(idx, 1);
-    // rebuild polyline path
-    const path = buildLineRef.current?.getPath();
-    if (path) {
-      path.clear();
-      buildPointsRef.current.forEach((p) => path.push(new google.maps.LatLng(p.lat, p.lng)));
-    }
     setBuildCount(buildPointsRef.current.length);
+    scheduleSnap();
   }
 
   function undoBuildPoint() {
@@ -376,6 +419,11 @@ function AtlasPage() {
   }
 
   function cancelBuildMode() {
+    if (buildSnapTimerRef.current) {
+      clearTimeout(buildSnapTimerRef.current);
+      buildSnapTimerRef.current = null;
+    }
+    buildReqIdRef.current++;
     clickListenerRef.current?.remove();
     clickListenerRef.current = null;
     buildLineRef.current?.setMap(null);
@@ -383,7 +431,10 @@ function AtlasPage() {
     buildMarkersRef.current.forEach((m) => m.setMap(null));
     buildMarkersRef.current = [];
     buildPointsRef.current = [];
+    buildSnappedPathRef.current = [];
+    setBuildDistanceM(0);
     setBuildCount(0);
+    setSnapping(false);
     buildModeRef.current = false;
     setBuildMode(false);
   }
@@ -399,12 +450,12 @@ function AtlasPage() {
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData.user?.id ?? null;
 
-      // distance
-      let dist = 0;
-      const pts = buildPointsRef.current;
-      for (let i = 1; i < pts.length; i++) {
-        dist += haversine(pts[i - 1], pts[i]);
-      }
+      // Prefer the snapped (road-following) path if available.
+      const pathToSave =
+        buildSnappedPathRef.current.length >= 2
+          ? buildSnappedPathRef.current
+          : buildPointsRef.current;
+      const dist = computePathDistance(pathToSave);
 
       const { data: runIns, error: runErr } = await supabase
         .from("runs")
@@ -414,7 +465,7 @@ function AtlasPage() {
       if (runErr || !runIns) throw runErr ?? new Error("Failed to create run");
 
       const baseTs = Date.now();
-      const rows = pts.map((p, i) => ({
+      const rows = pathToSave.map((p, i) => ({
         run_id: runIns.id,
         device_id: deviceId,
         user_id: userId,
