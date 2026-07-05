@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { loadMaps, cellKey } from "@/lib/gmaps";
+import { loadMaps, loadDrawing, cellKey } from "@/lib/gmaps";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { Loader2, Layers, ChevronDown, ChevronUp, PenLine, Trash2, Check, X } from "lucide-react";
@@ -9,6 +9,8 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
+import { computeRoute } from "@/lib/route.functions";
 
 export const Route = createFileRoute("/atlas")({
   head: () => ({
@@ -37,11 +39,22 @@ function AtlasPage() {
   const buildLineRef = useRef<google.maps.Polyline | null>(null);
   const buildMarkersRef = useRef<google.maps.Marker[]>([]);
   const buildPointsRef = useRef<Array<{ lat: number; lng: number }>>([]);
+  const buildSnappedPathRef = useRef<Array<{ lat: number; lng: number }>>([]);
+  const buildSnapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const buildReqIdRef = useRef(0);
   const clickListenerRef = useRef<google.maps.MapsEventListener | null>(null);
   const buildModeRef = useRef(false);
   const [buildMode, setBuildMode] = useState(false);
   const [buildCount, setBuildCount] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [snapping, setSnapping] = useState(false);
+  const [buildDistanceM, setBuildDistanceM] = useState(0);
+  const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
+  const runsMetaRef = useRef<Map<string, { distanceM: number; startedAt: string | null; endedAt: string | null; leadsCount: number; pointsCount: number }>>(new Map());
+  const computeRouteFn = useServerFn(computeRoute);
+  const pressTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const pressPositionRef = useRef<google.maps.LatLng | null>(null);
+  const pressFiredRef = useRef(false);
 
   const [loading, setLoading] = useState(true);
   const [showRuns, setShowRuns] = useState(true);
