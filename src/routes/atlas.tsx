@@ -245,6 +245,65 @@ function AtlasPage() {
     await refresh();
   }
 
+  function showRunInfo(runId: string, at: google.maps.LatLng) {
+    if (!mapRef.current) return;
+    const meta = runsMetaRef.current.get(runId);
+    if (!meta) return;
+    const km = (meta.distanceM / 1000).toFixed(meta.distanceM >= 10000 ? 1 : 2);
+    let durText = "—";
+    if (meta.startedAt && meta.endedAt) {
+      const ms = new Date(meta.endedAt).getTime() - new Date(meta.startedAt).getTime();
+      if (ms > 0 && Number.isFinite(ms)) durText = formatDuration(ms);
+    }
+    const html = `
+      <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; min-width: 180px; padding: 2px 4px;">
+        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #6b7280; margin-bottom: 4px;">Route</div>
+        <div style="display: grid; grid-template-columns: auto auto; gap: 4px 12px; font-size: 13px;">
+          <div style="color:#6b7280;">Length</div><div style="font-weight:600; text-align:right;">${km} km</div>
+          <div style="color:#6b7280;">Leads on route</div><div style="font-weight:600; text-align:right;">${meta.leadsCount}</div>
+          <div style="color:#6b7280;">Time</div><div style="font-weight:600; text-align:right;">${durText}</div>
+          <div style="color:#6b7280;">Points</div><div style="font-weight:600; text-align:right;">${meta.pointsCount}</div>
+        </div>
+        <div style="margin-top:6px; font-size: 11px; color: #9ca3af;">Long-press the route to delete.</div>
+      </div>`;
+    if (!infoWindowRef.current) infoWindowRef.current = new google.maps.InfoWindow();
+    infoWindowRef.current.setContent(html);
+    infoWindowRef.current.setPosition(at);
+    infoWindowRef.current.open({ map: mapRef.current });
+  }
+
+  function attachRunLineHandlers(runId: string, line: google.maps.Polyline) {
+    const LONG_PRESS_MS = 550;
+    line.addListener("mousedown", (e: google.maps.PolyMouseEvent) => {
+      if (buildModeRef.current) return;
+      pressFiredRef.current = false;
+      pressPositionRef.current = e.latLng ?? null;
+      const t = setTimeout(() => {
+        pressFiredRef.current = true;
+        infoWindowRef.current?.close();
+        promptDeleteRun(runId);
+      }, LONG_PRESS_MS);
+      pressTimersRef.current.set(runId, t);
+    });
+    const cancelPress = () => {
+      const t = pressTimersRef.current.get(runId);
+      if (t) {
+        clearTimeout(t);
+        pressTimersRef.current.delete(runId);
+      }
+    };
+    line.addListener("mouseup", () => cancelPress());
+    line.addListener("mouseout", () => cancelPress());
+    line.addListener("click", (e: google.maps.PolyMouseEvent) => {
+      if (buildModeRef.current) return;
+      if (pressFiredRef.current) {
+        pressFiredRef.current = false;
+        return;
+      }
+      if (e.latLng) showRunInfo(runId, e.latLng);
+    });
+  }
+
   // Manual route builder
   async function enterBuildMode() {
     if (!mapRef.current) return;
