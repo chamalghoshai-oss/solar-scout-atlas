@@ -626,6 +626,29 @@ function haversine(a: { lat: number; lng: number }, b: { lat: number; lng: numbe
   return 2 * R * Math.asin(Math.sqrt(s));
 }
 
+function computePathDistance(pts: Array<{ lat: number; lng: number }>): number {
+  let d = 0;
+  for (let i = 1; i < pts.length; i++) d += haversine(pts[i - 1], pts[i]);
+  return d;
+}
+
+function samplePoints<T>(arr: T[], max: number): T[] {
+  if (arr.length <= max) return arr;
+  const out: T[] = [];
+  const step = (arr.length - 1) / (max - 1);
+  for (let i = 0; i < max; i++) out.push(arr[Math.round(i * step)]);
+  return out;
+}
+
+function formatDuration(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
+
 function Stat({ n, l }: { n: string | number; l: string }) {
   return (
     <div>
