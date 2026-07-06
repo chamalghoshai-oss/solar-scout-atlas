@@ -23,6 +23,7 @@ export const STATUSES = [
   { value: "cold", label: "Cold (Quoted)" },
   { value: "reference", label: "Reference" },
   { value: "not_interested", label: "Not Interested" },
+  { value: "potential_house", label: "Potential house" },
 ];
 
 export function LeadFormSheet({
