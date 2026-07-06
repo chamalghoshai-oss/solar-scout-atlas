@@ -584,7 +584,7 @@ function AtlasPage() {
               <Toggle id="l-runs" checked={showRuns} onChange={setShowRuns} label="Route trails" dot="#ea7a1d" />
               <Toggle id="l-heat" checked={showHeat} onChange={setShowHeat} label="Repeat heat" dot="#dc2626" />
               <Toggle id="l-leads" checked={showLeads} onChange={setShowLeads} label="Leads" dot="#ea7a1d" />
-              <Toggle id="l-pot" checked={showPotential} onChange={setShowPotential} label="Potential" dot="#9ca3af" />
+              <Toggle id="l-pot" checked={showPotential} onChange={setShowPotential} label="Potential" dot="#3b82f6" />
             </div>
             <div className="mt-3 mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               Lead status
