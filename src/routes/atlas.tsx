@@ -595,7 +595,7 @@ function AtlasPage() {
               <Toggle id="s-cold" checked={statusFilter.cold} onChange={(v) => setStatusFilter((s) => ({ ...s, cold: v }))} label="Cold (quoted)" dot="#facc15" />
               <Toggle id="s-ref" checked={statusFilter.reference} onChange={(v) => setStatusFilter((s) => ({ ...s, reference: v }))} label="Reference" dot="#16a34a" square />
               <Toggle id="s-ni" checked={statusFilter.not_interested} onChange={(v) => setStatusFilter((s) => ({ ...s, not_interested: v }))} label="Not interested" dot="#6b7280" />
-              <Toggle id="s-other" checked={statusFilter.other} onChange={(v) => setStatusFilter((s) => ({ ...s, other: v }))} label="Other" dot="#9ca3af" />
+              <Toggle id="s-other" checked={statusFilter.other} onChange={(v) => setStatusFilter((s) => ({ ...s, other: v }))} label="Potential houses" dot="#9ca3af" />
             </div>
             <div className="mt-3 flex gap-2">
               <Button size="sm" variant="secondary" className="flex-1" onClick={enterBuildMode}>
