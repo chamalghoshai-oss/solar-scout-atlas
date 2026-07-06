@@ -718,7 +718,7 @@ function statusColor(key: ReturnType<typeof statusKey>): string {
 
 function pinFor(type: string, status: string, name: string | null): google.maps.Icon {
   const key = type === "potential" ? "other" : statusKey(status);
-  const fill = type === "potential" ? "#9ca3af" : statusColor(key);
+  const fill = type === "potential" ? "#3b82f6" : statusColor(key);
   const isSquare = key === "reference";
   const label = (name ?? "").trim();
   const shape = isSquare
