@@ -584,7 +584,7 @@ function AtlasPage() {
               <Toggle id="l-runs" checked={showRuns} onChange={setShowRuns} label="Route trails" dot="#ea7a1d" />
               <Toggle id="l-heat" checked={showHeat} onChange={setShowHeat} label="Repeat heat" dot="#dc2626" />
               <Toggle id="l-leads" checked={showLeads} onChange={setShowLeads} label="Leads" dot="#ea7a1d" />
-              <Toggle id="l-pot" checked={showPotential} onChange={setShowPotential} label="Potential" dot="#9ca3af" />
+              <Toggle id="l-pot" checked={showPotential} onChange={setShowPotential} label="Potential" dot="#3b82f6" />
             </div>
             <div className="mt-3 mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               Lead status
@@ -595,7 +595,7 @@ function AtlasPage() {
               <Toggle id="s-cold" checked={statusFilter.cold} onChange={(v) => setStatusFilter((s) => ({ ...s, cold: v }))} label="Cold (quoted)" dot="#facc15" />
               <Toggle id="s-ref" checked={statusFilter.reference} onChange={(v) => setStatusFilter((s) => ({ ...s, reference: v }))} label="Reference" dot="#16a34a" square />
               <Toggle id="s-ni" checked={statusFilter.not_interested} onChange={(v) => setStatusFilter((s) => ({ ...s, not_interested: v }))} label="Not interested" dot="#6b7280" />
-              <Toggle id="s-other" checked={statusFilter.other} onChange={(v) => setStatusFilter((s) => ({ ...s, other: v }))} label="Potential houses" dot="#9ca3af" />
+              <Toggle id="s-other" checked={statusFilter.other} onChange={(v) => setStatusFilter((s) => ({ ...s, other: v }))} label="Potential houses" dot="#3b82f6" />
             </div>
             <div className="mt-3 flex gap-2">
               <Button size="sm" variant="secondary" className="flex-1" onClick={enterBuildMode}>
