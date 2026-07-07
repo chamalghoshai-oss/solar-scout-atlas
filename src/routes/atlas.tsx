@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { computeRoute } from "@/lib/route.functions";
+import { ScopeSelector } from "@/components/ScopeSelector";
+import { DEFAULT_SCOPE_ID, SCOPES, getScope, inScope, scopeToLatLngBounds } from "@/lib/scopes";
 
 export const Route = createFileRoute("/atlas")({
   head: () => ({
@@ -71,6 +73,8 @@ function AtlasPage() {
     other: true,
   });
   const [stats, setStats] = useState({ runs: 0, leads: 0, potential: 0, km: 0 });
+  const [scopeId, setScopeId] = useState<string>(DEFAULT_SCOPE_ID);
+  const scope = getScope(scopeId) ?? SCOPES[0];
 
   useEffect(() => {
     let cancelled = false;
@@ -217,7 +221,7 @@ function AtlasPage() {
       bounds.extend({ lat: Number(l.lat), lng: Number(l.lng) });
     }
 
-    if (!bounds.isEmpty()) map.fitBounds(bounds, 60);
+    // Initial framing is driven by the scope selector effect.
 
     const km = runs.reduce((acc, r) => acc + Number(r.distance_m ?? 0), 0) / 1000;
     setStats({
@@ -504,21 +508,42 @@ function AtlasPage() {
   }
 
   useEffect(() => {
-    layersRef.current.runLines.forEach(({ line }) => line.setMap(showRuns ? mapRef.current : null));
-  }, [showRuns]);
-  useEffect(() => {
-    layersRef.current.heatMarkers.forEach((m) => m.setMap(showHeat ? mapRef.current : null));
-  }, [showHeat]);
-  useEffect(() => {
+    const map = mapRef.current;
+    const lineInScope = (line: google.maps.Polyline) => {
+      const path = line.getPath();
+      for (let i = 0; i < path.getLength(); i++) {
+        const ll = path.getAt(i);
+        if (inScope(scope, ll.lat(), ll.lng())) return true;
+      }
+      return false;
+    };
+    layersRef.current.runLines.forEach(({ line }) => {
+      line.setMap(showRuns && lineInScope(line) ? map : null);
+    });
+    layersRef.current.heatMarkers.forEach((m) => {
+      const p = m.getPosition();
+      const ok = !!p && inScope(scope, p.lat(), p.lng());
+      m.setMap(showHeat && ok ? map : null);
+    });
     layersRef.current.leadMarkers.forEach(({ marker, status }) => {
       const key = statusKey(status);
-      const visible = showLeads && (statusFilter[key] ?? true);
-      marker.setMap(visible ? mapRef.current : null);
+      const p = marker.getPosition();
+      const inB = !!p && inScope(scope, p.lat(), p.lng());
+      const visible = showLeads && inB && (statusFilter[key] ?? true);
+      marker.setMap(visible ? map : null);
     });
-  }, [showLeads, statusFilter]);
+    layersRef.current.potentialMarkers.forEach((m) => {
+      const p = m.getPosition();
+      const ok = !!p && inScope(scope, p.lat(), p.lng());
+      m.setMap(showPotential && ok ? map : null);
+    });
+  }, [showRuns, showHeat, showLeads, showPotential, statusFilter, scope]);
+
   useEffect(() => {
-    layersRef.current.potentialMarkers.forEach((m) => m.setMap(showPotential ? mapRef.current : null));
-  }, [showPotential]);
+    if (!mapRef.current) return;
+    mapRef.current.fitBounds(scopeToLatLngBounds(scope), 20);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopeId, loading]);
 
   return (
     <AppShell fullBleed>
@@ -535,6 +560,9 @@ function AtlasPage() {
             <Stat n={`${stats.km}`} l="km" />
             <Stat n={stats.leads} l="Leads" />
             <Stat n={stats.potential} l="Pinned" />
+          </div>
+          <div className="mt-2 flex justify-center">
+            <ScopeSelector value={scopeId} onChange={setScopeId} />
           </div>
         </div>
       </div>
