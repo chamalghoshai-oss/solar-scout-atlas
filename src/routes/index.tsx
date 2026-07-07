@@ -52,6 +52,7 @@ function LiveRun() {
   const [scopeId, setScopeId] = useState<string>(DEFAULT_SCOPE_ID);
   const scope = getScope(scopeId) ?? SCOPES[0];
   const leadMarkersRef = useRef<google.maps.Marker[]>([]);
+  const scopeRectRef = useRef<google.maps.Rectangle | null>(null);
 
   const openDraft = useCallback((lat: number, lng: number, type: "lead" | "potential") => {
     setDraft({ lat, lng, type });
@@ -216,6 +217,23 @@ function LiveRun() {
   useEffect(() => {
     if (!mapRef.current) return;
     mapRef.current.fitBounds(scopeToLatLngBounds(scope), 20);
+    const bounds = scopeToLatLngBounds(scope);
+    if (!scopeRectRef.current) {
+      scopeRectRef.current = new google.maps.Rectangle({
+        bounds,
+        map: mapRef.current,
+        strokeColor: "#ea7a1d",
+        strokeOpacity: 0.9,
+        strokeWeight: 2,
+        fillColor: "#ea7a1d",
+        fillOpacity: 0.06,
+        clickable: false,
+        zIndex: 1,
+      });
+    } else {
+      scopeRectRef.current.setBounds(bounds);
+      scopeRectRef.current.setMap(mapRef.current);
+    }
     leadMarkersRef.current.forEach((m) => {
       const p = m.getPosition();
       const ok = !!p && inScope(scope, p.lat(), p.lng());

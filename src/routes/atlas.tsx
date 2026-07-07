@@ -75,6 +75,7 @@ function AtlasPage() {
   const [stats, setStats] = useState({ runs: 0, leads: 0, potential: 0, km: 0 });
   const [scopeId, setScopeId] = useState<string>(DEFAULT_SCOPE_ID);
   const scope = getScope(scopeId) ?? SCOPES[0];
+  const scopeRectRef = useRef<google.maps.Rectangle | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -542,6 +543,23 @@ function AtlasPage() {
   useEffect(() => {
     if (!mapRef.current) return;
     mapRef.current.fitBounds(scopeToLatLngBounds(scope), 20);
+    const bounds = scopeToLatLngBounds(scope);
+    if (!scopeRectRef.current) {
+      scopeRectRef.current = new google.maps.Rectangle({
+        bounds,
+        map: mapRef.current,
+        strokeColor: "#ea7a1d",
+        strokeOpacity: 0.9,
+        strokeWeight: 2,
+        fillColor: "#ea7a1d",
+        fillOpacity: 0.06,
+        clickable: false,
+        zIndex: 1,
+      });
+    } else {
+      scopeRectRef.current.setBounds(bounds);
+      scopeRectRef.current.setMap(mapRef.current);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopeId, loading]);
 
