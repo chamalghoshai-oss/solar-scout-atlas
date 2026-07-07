@@ -9,6 +9,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
 import { snapToRoads } from "@/lib/roads.functions";
 import { toast } from "sonner";
+import { ScopeSelector } from "@/components/ScopeSelector";
+import { DEFAULT_SCOPE_ID, SCOPES, getScope, inScope, scopeToLatLngBounds } from "@/lib/scopes";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -47,6 +49,9 @@ function LiveRun() {
   const [draft, setDraft] = useState<LeadDraft | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [pendingPin, setPendingPin] = useState<{ lat: number; lng: number } | null>(null);
+  const [scopeId, setScopeId] = useState<string>(DEFAULT_SCOPE_ID);
+  const scope = getScope(scopeId) ?? SCOPES[0];
+  const leadMarkersRef = useRef<google.maps.Marker[]>([]);
 
   const openDraft = useCallback((lat: number, lng: number, type: "lead" | "potential") => {
     setDraft({ lat, lng, type });
@@ -190,15 +195,34 @@ function LiveRun() {
     const { data } = await supabase.from("leads").select("id,lat,lng,type,status,name");
     if (!data) return;
     const { g } = await loadMaps();
+    // Clear previous
+    leadMarkersRef.current.forEach((m) => m.setMap(null));
+    leadMarkersRef.current = [];
     for (const l of data) {
-      new g.maps.Marker({
-        position: { lat: Number(l.lat), lng: Number(l.lng) },
-        map,
+      const lat = Number(l.lat);
+      const lng = Number(l.lng);
+      const visible = inScope(scope, lat, lng);
+      const m = new g.maps.Marker({
+        position: { lat, lng },
+        map: visible ? map : null,
         icon: pinFor(l.type as string, l.status as string),
         title: l.name ?? (l.type === "potential" ? "Potential house" : "Lead"),
       });
+      leadMarkersRef.current.push(m);
     }
   }
+
+  // Zoom + filter pins on scope change
+  useEffect(() => {
+    if (!mapRef.current) return;
+    mapRef.current.fitBounds(scopeToLatLngBounds(scope), 20);
+    leadMarkersRef.current.forEach((m) => {
+      const p = m.getPosition();
+      const ok = !!p && inScope(scope, p.lat(), p.lng());
+      m.setMap(ok ? mapRef.current : null);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopeId]);
 
   function locationMessage(err: GeolocationPositionError) {
     if (err.code === err.PERMISSION_DENIED) {
@@ -383,11 +407,12 @@ function LiveRun() {
 
       {/* top brand pill */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <div className="pointer-events-auto mx-auto flex max-w-md items-center justify-between rounded-full bg-background/90 px-3 py-1.5 shadow-sm backdrop-blur">
+        <div className="pointer-events-auto mx-auto flex max-w-md items-center justify-between gap-2 rounded-full bg-background/90 px-3 py-1.5 shadow-sm backdrop-blur">
           <div className="flex items-center gap-2 text-sm font-semibold">
             <Sun className="h-4 w-4 text-primary" />
             VertX Field
           </div>
+          <ScopeSelector value={scopeId} onChange={setScopeId} />
           {running && (
             <div className="flex items-center gap-2 text-xs tabular-nums text-muted-foreground">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
