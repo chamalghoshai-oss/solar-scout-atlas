@@ -11,6 +11,7 @@ import { snapToRoads } from "@/lib/roads.functions";
 import { toast } from "sonner";
 import { ScopeSelector } from "@/components/ScopeSelector";
 import { DEFAULT_SCOPE_ID, SCOPES, getScope, inScope, scopeToLatLngBounds } from "@/lib/scopes";
+import { loadBoundaryGeoJSON } from "@/lib/boundaries";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -52,7 +53,8 @@ function LiveRun() {
   const [scopeId, setScopeId] = useState<string>(DEFAULT_SCOPE_ID);
   const scope = getScope(scopeId) ?? SCOPES[0];
   const leadMarkersRef = useRef<google.maps.Marker[]>([]);
-  const scopeRectRef = useRef<google.maps.Rectangle | null>(null);
+  const scopeDataRef = useRef<google.maps.Data | null>(null);
+  const boundaryRequestIdRef = useRef(0);
 
   const openDraft = useCallback((lat: number, lng: number, type: "lead" | "potential") => {
     setDraft({ lat, lng, type });
@@ -213,34 +215,42 @@ function LiveRun() {
     }
   }
 
-  // Zoom + filter pins on scope change
+  // Zoom + filter pins + real boundary on scope change
   useEffect(() => {
     if (!mapRef.current) return;
     mapRef.current.fitBounds(scopeToLatLngBounds(scope), 20);
-    const bounds = scopeToLatLngBounds(scope);
-    if (!scopeRectRef.current) {
-      scopeRectRef.current = new google.maps.Rectangle({
-        bounds,
-        map: mapRef.current,
-        strokeColor: "#ea7a1d",
-        strokeOpacity: 0.9,
-        strokeWeight: 2,
-        fillColor: "#ea7a1d",
-        fillOpacity: 0.06,
-        clickable: false,
-        zIndex: 1,
-      });
-    } else {
-      scopeRectRef.current.setBounds(bounds);
-      scopeRectRef.current.setMap(mapRef.current);
-    }
+    const requestId = ++boundaryRequestIdRef.current;
+    (async () => {
+      const geo = await loadBoundaryGeoJSON(scope);
+      if (!mapRef.current) return;
+      if (boundaryRequestIdRef.current !== requestId) return;
+      if (!scopeDataRef.current) {
+        scopeDataRef.current = new google.maps.Data({ map: mapRef.current });
+        scopeDataRef.current.setStyle((feature) => {
+          const geom = feature.getGeometry();
+          const isLine =
+            geom?.getType() === "LineString" || geom?.getType() === "MultiLineString";
+          return {
+            strokeColor: "#ea7a1d",
+            strokeOpacity: 0.9,
+            strokeWeight: 2,
+            fillColor: "#ea7a1d",
+            fillOpacity: isLine ? 0 : 0.06,
+            clickable: false,
+            zIndex: 1,
+          };
+        });
+      }
+      scopeDataRef.current.forEach((f) => scopeDataRef.current?.remove(f));
+      if (geo) scopeDataRef.current.addGeoJson(geo);
+    })();
     leadMarkersRef.current.forEach((m) => {
       const p = m.getPosition();
       const ok = !!p && inScope(scope, p.lat(), p.lng());
       m.setMap(ok ? mapRef.current : null);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scopeId]);
+  }, [scopeId, ready]);
 
   function locationMessage(err: GeolocationPositionError) {
     if (err.code === err.PERMISSION_DENIED) {
