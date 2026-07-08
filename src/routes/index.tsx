@@ -11,6 +11,7 @@ import { snapToRoads } from "@/lib/roads.functions";
 import { toast } from "sonner";
 import { ScopeSelector } from "@/components/ScopeSelector";
 import { DEFAULT_SCOPE_ID, SCOPES, getScope, inScope, scopeToLatLngBounds } from "@/lib/scopes";
+import { loadBoundaryGeoJSON } from "@/lib/boundaries";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -52,7 +53,8 @@ function LiveRun() {
   const [scopeId, setScopeId] = useState<string>(DEFAULT_SCOPE_ID);
   const scope = getScope(scopeId) ?? SCOPES[0];
   const leadMarkersRef = useRef<google.maps.Marker[]>([]);
-  const scopeRectRef = useRef<google.maps.Rectangle | null>(null);
+  const scopeDataRef = useRef<google.maps.Data | null>(null);
+  const boundaryRequestIdRef = useRef(0);
 
   const openDraft = useCallback((lat: number, lng: number, type: "lead" | "potential") => {
     setDraft({ lat, lng, type });
