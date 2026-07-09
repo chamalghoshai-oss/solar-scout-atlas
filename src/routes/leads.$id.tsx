@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { STATUSES, StatusBadgePlaceholder } from "./leads-helpers";
-import { ArrowLeft, MapPin, MessageCircle, Save, Trash2, Camera, Loader2, SunMedium, ImagePlus } from "lucide-react";
+import { ArrowLeft, MapPin, MessageCircle, Save, Trash2, Camera, Loader2, SunMedium, ImagePlus, Boxes } from "lucide-react";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { getSignedUrls, uploadPhoto, type PhotoMeta } from "@/lib/photos";
 import { toast } from "sonner";
@@ -309,6 +309,14 @@ function LeadDetail() {
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="mr-2 h-4 w-4" /> Save</>}
           </Button>
         </div>
+
+        <Link
+          to="/simulator"
+          search={{ leadId: lead.id } as never}
+          className="flex items-center justify-center gap-2 rounded-md border border-primary/40 bg-primary/10 px-3 py-2.5 text-sm font-semibold text-primary hover:bg-primary/15"
+        >
+          <Boxes className="h-4 w-4" /> Open 3D Solar Simulator
+        </Link>
       </div>
 
       <GeoCamera

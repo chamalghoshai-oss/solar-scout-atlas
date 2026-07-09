@@ -226,6 +226,65 @@ export type Database = {
         }
         Relationships: []
       }
+      sim_jobs: {
+        Row: {
+          annual_kwh: number | null
+          created_at: string
+          error: string | null
+          id: string
+          kw_estimate: number | null
+          lead_id: string | null
+          mesh_url: string | null
+          notes: string | null
+          provider: string
+          status: Database["public"]["Enums"]["sim_job_status"]
+          title: string | null
+          updated_at: string
+          upload_paths: string[]
+          user_id: string
+        }
+        Insert: {
+          annual_kwh?: number | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          kw_estimate?: number | null
+          lead_id?: string | null
+          mesh_url?: string | null
+          notes?: string | null
+          provider?: string
+          status?: Database["public"]["Enums"]["sim_job_status"]
+          title?: string | null
+          updated_at?: string
+          upload_paths?: string[]
+          user_id: string
+        }
+        Update: {
+          annual_kwh?: number | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          kw_estimate?: number | null
+          lead_id?: string | null
+          mesh_url?: string | null
+          notes?: string | null
+          provider?: string
+          status?: Database["public"]["Enums"]["sim_job_status"]
+          title?: string | null
+          updated_at?: string
+          upload_paths?: string[]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sim_jobs_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -263,6 +322,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "surveyor"
+      sim_job_status: "queued" | "processing" | "ready" | "failed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -391,6 +451,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "surveyor"],
+      sim_job_status: ["queued", "processing", "ready", "failed"],
     },
   },
 } as const
