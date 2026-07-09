@@ -9,14 +9,21 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SimulatorRouteImport } from './routes/simulator'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as LeadsRouteImport } from './routes/leads'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AtlasRouteImport } from './routes/atlas'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SimulatorIdRouteImport } from './routes/simulator.$id'
 import { Route as LeadsIdRouteImport } from './routes/leads.$id'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 
+const SimulatorRoute = SimulatorRouteImport.update({
+  id: '/simulator',
+  path: '/simulator',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -42,6 +49,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SimulatorIdRoute = SimulatorIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => SimulatorRoute,
+} as any)
 const LeadsIdRoute = LeadsIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -59,8 +71,10 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/leads': typeof LeadsRouteWithChildren
   '/settings': typeof SettingsRoute
+  '/simulator': typeof SimulatorRouteWithChildren
   '/admin/users': typeof AdminUsersRoute
   '/leads/$id': typeof LeadsIdRoute
+  '/simulator/$id': typeof SimulatorIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -68,8 +82,10 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/leads': typeof LeadsRouteWithChildren
   '/settings': typeof SettingsRoute
+  '/simulator': typeof SimulatorRouteWithChildren
   '/admin/users': typeof AdminUsersRoute
   '/leads/$id': typeof LeadsIdRoute
+  '/simulator/$id': typeof SimulatorIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -78,8 +94,10 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/leads': typeof LeadsRouteWithChildren
   '/settings': typeof SettingsRoute
+  '/simulator': typeof SimulatorRouteWithChildren
   '/admin/users': typeof AdminUsersRoute
   '/leads/$id': typeof LeadsIdRoute
+  '/simulator/$id': typeof SimulatorIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -89,8 +107,10 @@ export interface FileRouteTypes {
     | '/auth'
     | '/leads'
     | '/settings'
+    | '/simulator'
     | '/admin/users'
     | '/leads/$id'
+    | '/simulator/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -98,8 +118,10 @@ export interface FileRouteTypes {
     | '/auth'
     | '/leads'
     | '/settings'
+    | '/simulator'
     | '/admin/users'
     | '/leads/$id'
+    | '/simulator/$id'
   id:
     | '__root__'
     | '/'
@@ -107,8 +129,10 @@ export interface FileRouteTypes {
     | '/auth'
     | '/leads'
     | '/settings'
+    | '/simulator'
     | '/admin/users'
     | '/leads/$id'
+    | '/simulator/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -117,11 +141,19 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   LeadsRoute: typeof LeadsRouteWithChildren
   SettingsRoute: typeof SettingsRoute
+  SimulatorRoute: typeof SimulatorRouteWithChildren
   AdminUsersRoute: typeof AdminUsersRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/simulator': {
+      id: '/simulator'
+      path: '/simulator'
+      fullPath: '/simulator'
+      preLoaderRoute: typeof SimulatorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -157,6 +189,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/simulator/$id': {
+      id: '/simulator/$id'
+      path: '/$id'
+      fullPath: '/simulator/$id'
+      preLoaderRoute: typeof SimulatorIdRouteImport
+      parentRoute: typeof SimulatorRoute
+    }
     '/leads/$id': {
       id: '/leads/$id'
       path: '/$id'
@@ -184,12 +223,25 @@ const LeadsRouteChildren: LeadsRouteChildren = {
 
 const LeadsRouteWithChildren = LeadsRoute._addFileChildren(LeadsRouteChildren)
 
+interface SimulatorRouteChildren {
+  SimulatorIdRoute: typeof SimulatorIdRoute
+}
+
+const SimulatorRouteChildren: SimulatorRouteChildren = {
+  SimulatorIdRoute: SimulatorIdRoute,
+}
+
+const SimulatorRouteWithChildren = SimulatorRoute._addFileChildren(
+  SimulatorRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AtlasRoute: AtlasRoute,
   AuthRoute: AuthRoute,
   LeadsRoute: LeadsRouteWithChildren,
   SettingsRoute: SettingsRoute,
+  SimulatorRoute: SimulatorRouteWithChildren,
   AdminUsersRoute: AdminUsersRoute,
 }
 export const routeTree = rootRouteImport
