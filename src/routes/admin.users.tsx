@@ -27,7 +27,7 @@ function AdminUsers() {
   const [accessRows, setAccessRows] = useState<AccessRow[]>([]);
   const [newEmail, setNewEmail] = useState("");
   const [newLabel, setNewLabel] = useState("");
-  const [newRole, setNewRole] = useState<AppRole>("surveyor");
+  const [newRole, setNewRole] = useState<AppRole>("field_staff");
   const [newTrackPhone, setNewTrackPhone] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -80,7 +80,7 @@ function AdminUsers() {
     toast.success("Access saved");
     setNewEmail("");
     setNewLabel("");
-    setNewRole("surveyor");
+    setNewRole("field_staff");
     setNewTrackPhone(true);
     load();
   }
@@ -132,8 +132,9 @@ function AdminUsers() {
             <Select value={newRole} onValueChange={(v) => setNewRole(v as AppRole)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="admin">Owner</SelectItem>
-                <SelectItem value="surveyor">Team</SelectItem>
+                <SelectItem value="owner">Owner</SelectItem>
+                <SelectItem value="manager">Manager</SelectItem>
+                <SelectItem value="field_staff">Field Staff</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -155,7 +156,7 @@ function AdminUsers() {
         <ul className="space-y-2">
           {accessRows.map((u) => {
             const signedInUser = rows.find((row) => row.email?.toLowerCase() === u.email.toLowerCase());
-            const isOwner = u.role === "admin";
+            const isOwner = u.role === "owner";
             return (
               <li key={u.id} className="rounded-xl border border-border bg-card p-3">
                 <div className="flex items-center justify-between gap-2">
@@ -171,8 +172,9 @@ function AdminUsers() {
                   <Select value={u.role} onValueChange={(v) => updateAccess(u.id, { role: v as AppRole })} disabled={u.email === auth.email?.toLowerCase()}>
                     <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="admin">Owner</SelectItem>
-                      <SelectItem value="surveyor">Team</SelectItem>
+                      <SelectItem value="owner">Owner</SelectItem>
+                      <SelectItem value="manager">Manager</SelectItem>
+                      <SelectItem value="field_staff">Field Staff</SelectItem>
                     </SelectContent>
                   </Select>
                   <div className="flex h-8 items-center gap-2 rounded-md border border-border px-2">
