@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_log: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_id: string | null
+          created_at: string
+          id: string
+          ip_address: string | null
+          new_value: Json | null
+          previous_value: Json | null
+          target_id: string | null
+          target_type: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          new_value?: Json | null
+          previous_value?: Json | null
+          target_id?: string | null
+          target_type?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          new_value?: Json | null
+          previous_value?: Json | null
+          target_id?: string | null
+          target_type?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       authorized_emails: {
         Row: {
           created_at: string
@@ -21,7 +63,7 @@ export type Database = {
           email: string
           id: string
           label: string | null
-          role: Database["public"]["Enums"]["app_role"]
+          role: string
           track_phone: boolean
           updated_at: string
         }
@@ -31,7 +73,7 @@ export type Database = {
           email: string
           id?: string
           label?: string | null
-          role?: Database["public"]["Enums"]["app_role"]
+          role?: string
           track_phone?: boolean
           updated_at?: string
         }
@@ -41,7 +83,7 @@ export type Database = {
           email?: string
           id?: string
           label?: string | null
-          role?: Database["public"]["Enums"]["app_role"]
+          role?: string
           track_phone?: boolean
           updated_at?: string
         }
@@ -107,26 +149,49 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
+          designation: string | null
           email: string | null
           full_name: string | null
           id: string
+          manager_id: string | null
+          must_change_password: boolean
+          phone: string | null
+          status: string
           updated_at: string
         }
         Insert: {
           created_at?: string
+          designation?: string | null
           email?: string | null
           full_name?: string | null
           id: string
+          manager_id?: string | null
+          must_change_password?: boolean
+          phone?: string | null
+          status?: string
           updated_at?: string
         }
         Update: {
           created_at?: string
+          designation?: string | null
           email?: string | null
           full_name?: string | null
           id?: string
+          manager_id?: string | null
+          must_change_password?: boolean
+          phone?: string | null
+          status?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_manager_fk"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       run_points: {
         Row: {
@@ -289,19 +354,19 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: string
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: string
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
-          role?: Database["public"]["Enums"]["app_role"]
+          role?: string
           user_id?: string
         }
         Relationships: []
@@ -311,17 +376,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
+      has_role: { Args: { _role: string; _user_id: string }; Returns: boolean }
+      is_manager: { Args: { _user_id: string }; Returns: boolean }
+      is_owner: { Args: { _user_id: string }; Returns: boolean }
+      manages_user: {
+        Args: { _manager_id: string; _staff_id: string }
         Returns: boolean
       }
-      is_owner: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "admin" | "surveyor"
       sim_job_status: "queued" | "processing" | "ready" | "failed"
     }
     CompositeTypes: {
@@ -450,7 +513,6 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "surveyor"],
       sim_job_status: ["queued", "processing", "ready", "failed"],
     },
   },
