@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export type AppRole = "admin" | "surveyor";
+export type AppRole = "owner" | "manager" | "field_staff";
+
+export const ROLE_LABELS: Record<AppRole, string> = {
+  owner: "Owner",
+  manager: "Manager",
+  field_staff: "Field Staff",
+};
 
 export async function getUserId(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
@@ -21,6 +27,9 @@ export type AuthState = {
   email: string | null;
   fullName: string | null;
   roles: AppRole[];
+  isOwner: boolean;
+  isManager: boolean;
+  /** Legacy alias — true when the user is an owner. */
   isAdmin: boolean;
   canTrackPhone: boolean;
 };
@@ -32,6 +41,8 @@ export function useAuth(): AuthState {
     email: null,
     fullName: null,
     roles: [],
+    isOwner: false,
+    isManager: false,
     isAdmin: false,
     canTrackPhone: false,
   });
@@ -40,7 +51,7 @@ export function useAuth(): AuthState {
     let active = true;
     async function hydrate(uid: string | null, email: string | null) {
       if (!uid) {
-        if (active) setState({ loading: false, userId: null, email: null, fullName: null, roles: [], isAdmin: false, canTrackPhone: false });
+        if (active) setState({ loading: false, userId: null, email: null, fullName: null, roles: [], isOwner: false, isManager: false, isAdmin: false, canTrackPhone: false });
         return;
       }
       const [rolesRes, profRes, accessRes] = await Promise.all([
@@ -50,14 +61,17 @@ export function useAuth(): AuthState {
       ]);
       if (!active) return;
       const roles = (rolesRes.data ?? []).map((r) => r.role as AppRole);
+      const isOwner = roles.includes("owner");
       setState({
         loading: false,
         userId: uid,
         email,
         fullName: (profRes.data?.full_name as string | undefined) ?? null,
         roles,
-        isAdmin: roles.includes("admin"),
-        canTrackPhone: accessRes.data?.track_phone ?? roles.includes("admin"),
+        isOwner,
+        isManager: roles.includes("manager"),
+        isAdmin: isOwner,
+        canTrackPhone: accessRes.data?.track_phone ?? isOwner,
       });
     }
     supabase.auth.getSession().then(({ data }) => {
