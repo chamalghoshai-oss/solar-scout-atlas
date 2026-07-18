@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, MailPlus, Shield, Trash2 } from "lucide-react";
+import { Loader2, MailPlus, Shield, Trash2, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { createAccessUser, DEFAULT_ACCESS_PASSWORD, resetAccessPassword } from "@/lib/users.functions";
 import { useServerFn } from "@tanstack/react-start";
@@ -188,6 +188,11 @@ function AdminUsers() {
                   </div>
                   <Button type="button" size="icon" variant="outline" className="h-8 w-8" onClick={() => removeAccess(u)} disabled={u.email === auth.email?.toLowerCase()} aria-label="Remove access">
                     <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <div className="mt-2 flex justify-end">
+                  <Button type="button" size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => handleResetPassword(u.email)}>
+                    <KeyRound className="mr-1 h-3 w-3" /> Reset to default password
                   </Button>
                 </div>
               </li>
