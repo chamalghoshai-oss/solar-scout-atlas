@@ -14,8 +14,13 @@ export const createAccessUser = createServerFn({ method: "POST" })
     return { email, label: data.label?.trim() || null, role: data.role, trackPhone: !!data.trackPhone };
   })
   .handler(async ({ data, context }) => {
-    const { data: isOwner } = await context.supabase.rpc("is_owner", { _user_id: context.userId });
-    if (!isOwner) throw new Error("Forbidden");
+    const [{ data: isOwner }, { data: isManager }] = await Promise.all([
+      context.supabase.rpc("is_owner", { _user_id: context.userId }),
+      context.supabase.rpc("is_manager", { _user_id: context.userId }),
+    ]);
+    if (!isOwner && !isManager) throw new Error("Forbidden");
+    // Managers can only create field_staff.
+    if (!isOwner && data.role !== "field_staff") throw new Error("Managers can only create field staff");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
@@ -48,8 +53,20 @@ export const resetAccessPassword = createServerFn({ method: "POST" })
     return { email };
   })
   .handler(async ({ data, context }) => {
-    const { data: isOwner } = await context.supabase.rpc("is_owner", { _user_id: context.userId });
-    if (!isOwner) throw new Error("Forbidden");
+    const [{ data: isOwner }, { data: isManager }] = await Promise.all([
+      context.supabase.rpc("is_owner", { _user_id: context.userId }),
+      context.supabase.rpc("is_manager", { _user_id: context.userId }),
+    ]);
+    if (!isOwner && !isManager) throw new Error("Forbidden");
+    // Managers can only reset field_staff passwords.
+    if (!isOwner) {
+      const { data: ae } = await context.supabase
+        .from("authorized_emails")
+        .select("role")
+        .eq("email", data.email)
+        .maybeSingle();
+      if (!ae || ae.role !== "field_staff") throw new Error("Managers can only reset field staff");
+    }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: list, error: lErr } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 200 });
     if (lErr) throw new Error(lErr.message);
