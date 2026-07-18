@@ -32,13 +32,15 @@ function AdminUsers() {
   const [newEmail, setNewEmail] = useState("");
   const [newLabel, setNewLabel] = useState("");
   const [newRole, setNewRole] = useState<AppRole>("field_staff");
+  const canManage = auth.isOwner || auth.isManager;
+  const roleOptions: AppRole[] = auth.isOwner ? ["owner", "manager", "field_staff"] : ["field_staff"];
   const [newTrackPhone, setNewTrackPhone] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!auth.loading && !auth.isAdmin) navigate({ to: "/" });
-  }, [auth, navigate]);
+    if (!auth.loading && !canManage) navigate({ to: "/" });
+  }, [auth.loading, canManage, navigate]);
 
   async function load() {
     setLoading(true);
@@ -58,8 +60,8 @@ function AdminUsers() {
     setLoading(false);
   }
   useEffect(() => {
-    if (auth.isAdmin) load();
-  }, [auth.isAdmin]);
+    if (canManage) load();
+  }, [canManage]);
 
   async function addAccess(e: React.FormEvent) {
     e.preventDefault();
@@ -107,7 +109,7 @@ function AdminUsers() {
     load();
   }
 
-  if (auth.loading || !auth.isAdmin) {
+  if (auth.loading || !canManage) {
     return <AppShell><div className="flex h-40 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div></AppShell>;
   }
 
@@ -116,8 +118,12 @@ function AdminUsers() {
       <header className="mb-4 flex items-center gap-2">
         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-primary"><Shield className="h-5 w-5" /></div>
         <div>
-          <h1 className="text-xl font-bold">Owner access</h1>
-          <p className="text-xs text-muted-foreground">Add Gmail access and phone tracking permission</p>
+          <h1 className="text-xl font-bold">{auth.isOwner ? "Owner access" : "Team access"}</h1>
+          <p className="text-xs text-muted-foreground">
+            {auth.isOwner
+              ? "Add owners, managers, or field staff and control phone tracking."
+              : "Add and manage your field staff."}
+          </p>
         </div>
       </header>
 
@@ -137,9 +143,9 @@ function AdminUsers() {
             <Select value={newRole} onValueChange={(v) => setNewRole(v as AppRole)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="owner">Owner</SelectItem>
-                <SelectItem value="manager">Manager</SelectItem>
-                <SelectItem value="field_staff">Field Staff</SelectItem>
+                {roleOptions.includes("owner") && <SelectItem value="owner">Owner</SelectItem>}
+                {roleOptions.includes("manager") && <SelectItem value="manager">Manager</SelectItem>}
+                {roleOptions.includes("field_staff") && <SelectItem value="field_staff">Field Staff</SelectItem>}
               </SelectContent>
             </Select>
           </div>
@@ -162,6 +168,8 @@ function AdminUsers() {
           {accessRows.map((u) => {
             const signedInUser = rows.find((row) => row.email?.toLowerCase() === u.email.toLowerCase());
             const isOwner = u.role === "owner";
+            // Managers can only touch field_staff rows.
+            const canEditRow = auth.isOwner || (auth.isManager && u.role === "field_staff");
             return (
               <li key={u.id} className="rounded-xl border border-border bg-card p-3">
                 <div className="flex items-center justify-between gap-2">
@@ -174,24 +182,28 @@ function AdminUsers() {
                   </div>
                 </div>
                 <div className="mt-3 grid grid-cols-[1fr_auto_auto] items-center gap-2">
-                  <Select value={u.role} onValueChange={(v) => updateAccess(u.id, { role: v as AppRole })} disabled={u.email === auth.email?.toLowerCase()}>
+                  <Select
+                    value={u.role}
+                    onValueChange={(v) => updateAccess(u.id, { role: v as AppRole })}
+                    disabled={!canEditRow || u.email === auth.email?.toLowerCase() || !auth.isOwner}
+                  >
                     <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="owner">Owner</SelectItem>
-                      <SelectItem value="manager">Manager</SelectItem>
+                      {auth.isOwner && <SelectItem value="owner">Owner</SelectItem>}
+                      {auth.isOwner && <SelectItem value="manager">Manager</SelectItem>}
                       <SelectItem value="field_staff">Field Staff</SelectItem>
                     </SelectContent>
                   </Select>
                   <div className="flex h-8 items-center gap-2 rounded-md border border-border px-2">
                     <span className="text-[11px] text-muted-foreground">Track</span>
-                    <Switch checked={u.track_phone} onCheckedChange={(v) => updateAccess(u.id, { track_phone: v })} />
+                    <Switch checked={u.track_phone} onCheckedChange={(v) => updateAccess(u.id, { track_phone: v })} disabled={!canEditRow} />
                   </div>
-                  <Button type="button" size="icon" variant="outline" className="h-8 w-8" onClick={() => removeAccess(u)} disabled={u.email === auth.email?.toLowerCase()} aria-label="Remove access">
+                  <Button type="button" size="icon" variant="outline" className="h-8 w-8" onClick={() => removeAccess(u)} disabled={!canEditRow || u.email === auth.email?.toLowerCase()} aria-label="Remove access">
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
                 <div className="mt-2 flex justify-end">
-                  <Button type="button" size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => handleResetPassword(u.email)}>
+                  <Button type="button" size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => handleResetPassword(u.email)} disabled={!canEditRow}>
                     <KeyRound className="mr-1 h-3 w-3" /> Reset to default password
                   </Button>
                 </div>
