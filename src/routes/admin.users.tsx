@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Loader2, MailPlus, Shield, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { createAccessUser, DEFAULT_ACCESS_PASSWORD, resetAccessPassword } from "@/lib/users.functions";
+import { useServerFn } from "@tanstack/react-start";
 
 export const Route = createFileRoute("/admin/users")({
   head: () => ({ meta: [{ title: "Owner Access — VertX Field" }] }),
@@ -23,6 +25,8 @@ type AccessRow = { id: string; email: string; label: string | null; role: AppRol
 function AdminUsers() {
   const auth = useAuth();
   const navigate = useNavigate();
+  const createAccess = useServerFn(createAccessUser);
+  const resetPassword = useServerFn(resetAccessPassword);
   const [rows, setRows] = useState<Row[]>([]);
   const [accessRows, setAccessRows] = useState<AccessRow[]>([]);
   const [newEmail, setNewEmail] = useState("");
@@ -60,29 +64,29 @@ function AdminUsers() {
   async function addAccess(e: React.FormEvent) {
     e.preventDefault();
     const cleanEmail = newEmail.trim().toLowerCase();
-    if (!cleanEmail.endsWith("@gmail.com")) {
-      toast.error("Only Gmail addresses can be added.");
-      return;
-    }
     setSaving(true);
-    const { error } = await supabase.from("authorized_emails").upsert({
-      email: cleanEmail,
-      label: newLabel.trim() || null,
-      role: newRole,
-      track_phone: newTrackPhone,
-      created_by: auth.userId,
-    }, { onConflict: "email" });
-    setSaving(false);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      await createAccess({ data: { email: cleanEmail, label: newLabel.trim() || null, role: newRole, trackPhone: newTrackPhone } });
+      toast.success(`Access saved · default password: ${DEFAULT_ACCESS_PASSWORD}`);
+      setNewEmail("");
+      setNewLabel("");
+      setNewRole("field_staff");
+      setNewTrackPhone(true);
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save access");
+    } finally {
+      setSaving(false);
     }
-    toast.success("Access saved");
-    setNewEmail("");
-    setNewLabel("");
-    setNewRole("field_staff");
-    setNewTrackPhone(true);
-    load();
+  }
+
+  async function handleResetPassword(email: string) {
+    try {
+      await resetPassword({ data: { email } });
+      toast.success(`Password reset to ${DEFAULT_ACCESS_PASSWORD}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to reset password");
+    }
   }
 
   async function updateAccess(id: string, patch: Partial<Pick<AccessRow, "role" | "track_phone" | "label">>) {
@@ -119,8 +123,9 @@ function AdminUsers() {
 
       <form onSubmit={addAccess} className="mb-4 space-y-3 rounded-xl border border-border bg-card p-3">
         <div>
-          <Label>Gmail address</Label>
-          <Input type="email" inputMode="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="name@gmail.com" required />
+          <Label>Email address</Label>
+          <Input type="email" inputMode="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="name@example.com" required />
+          <p className="mt-1 text-[11px] text-muted-foreground">Default password will be set to <span className="font-mono font-semibold">{DEFAULT_ACCESS_PASSWORD}</span></p>
         </div>
         <div>
           <Label>Name</Label>

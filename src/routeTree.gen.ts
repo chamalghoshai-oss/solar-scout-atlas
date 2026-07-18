@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SimulatorRouteImport } from './routes/simulator'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as LeadsRouteImport } from './routes/leads'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AtlasRouteImport } from './routes/atlas'
@@ -27,6 +28,11 @@ const SimulatorRoute = SimulatorRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LeadsRoute = LeadsRouteImport.update({
@@ -70,6 +76,7 @@ export interface FileRoutesByFullPath {
   '/atlas': typeof AtlasRoute
   '/auth': typeof AuthRoute
   '/leads': typeof LeadsRouteWithChildren
+  '/profile': typeof ProfileRoute
   '/settings': typeof SettingsRoute
   '/simulator': typeof SimulatorRouteWithChildren
   '/admin/users': typeof AdminUsersRoute
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/atlas': typeof AtlasRoute
   '/auth': typeof AuthRoute
   '/leads': typeof LeadsRouteWithChildren
+  '/profile': typeof ProfileRoute
   '/settings': typeof SettingsRoute
   '/simulator': typeof SimulatorRouteWithChildren
   '/admin/users': typeof AdminUsersRoute
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/atlas': typeof AtlasRoute
   '/auth': typeof AuthRoute
   '/leads': typeof LeadsRouteWithChildren
+  '/profile': typeof ProfileRoute
   '/settings': typeof SettingsRoute
   '/simulator': typeof SimulatorRouteWithChildren
   '/admin/users': typeof AdminUsersRoute
@@ -106,6 +115,7 @@ export interface FileRouteTypes {
     | '/atlas'
     | '/auth'
     | '/leads'
+    | '/profile'
     | '/settings'
     | '/simulator'
     | '/admin/users'
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/atlas'
     | '/auth'
     | '/leads'
+    | '/profile'
     | '/settings'
     | '/simulator'
     | '/admin/users'
@@ -128,6 +139,7 @@ export interface FileRouteTypes {
     | '/atlas'
     | '/auth'
     | '/leads'
+    | '/profile'
     | '/settings'
     | '/simulator'
     | '/admin/users'
@@ -140,6 +152,7 @@ export interface RootRouteChildren {
   AtlasRoute: typeof AtlasRoute
   AuthRoute: typeof AuthRoute
   LeadsRoute: typeof LeadsRouteWithChildren
+  ProfileRoute: typeof ProfileRoute
   SettingsRoute: typeof SettingsRoute
   SimulatorRoute: typeof SimulatorRouteWithChildren
   AdminUsersRoute: typeof AdminUsersRoute
@@ -159,6 +172,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/leads': {
@@ -240,6 +260,7 @@ const rootRouteChildren: RootRouteChildren = {
   AtlasRoute: AtlasRoute,
   AuthRoute: AuthRoute,
   LeadsRoute: LeadsRouteWithChildren,
+  ProfileRoute: ProfileRoute,
   SettingsRoute: SettingsRoute,
   SimulatorRoute: SimulatorRouteWithChildren,
   AdminUsersRoute: AdminUsersRoute,

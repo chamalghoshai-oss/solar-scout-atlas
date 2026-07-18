@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Map, Compass, Users, Settings as SettingsIcon } from "lucide-react";
+import { Map, Compass, Users, Settings as SettingsIcon, User } from "lucide-react";
 import { type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -7,6 +7,7 @@ const tabs = [
   { to: "/", label: "Run", icon: Map },
   { to: "/atlas", label: "Atlas", icon: Compass },
   { to: "/leads", label: "Leads", icon: Users },
+  { to: "/profile", label: "Profile", icon: User },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ] as const;
 
@@ -16,7 +17,7 @@ export function AppShell({ children, fullBleed = false }: { children: ReactNode;
     <div className="flex min-h-[100dvh] flex-col bg-background text-foreground">
       <main className={cn("flex-1", fullBleed ? "relative" : "px-4 pt-4 pb-24")}>{children}</main>
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <ul className="mx-auto grid max-w-md grid-cols-4">
+        <ul className="mx-auto grid max-w-md grid-cols-5">
           {tabs.map((t) => {
             const active = t.to === "/" ? pathname === "/" : pathname.startsWith(t.to);
             const Icon = t.icon;
