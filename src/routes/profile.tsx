@@ -1,9 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth, ROLE_LABELS, type AppRole } from "@/lib/auth";
-import { Loader2, User, Mail, Phone, Shield, Users as UsersIcon, ChevronRight, MapPin, Route as RouteIcon } from "lucide-react";
+import { Loader2, User, Mail, Phone, Shield, Users as UsersIcon, ChevronRight, MapPin, Route as RouteIcon, LogOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/profile")({
   head: () => ({ meta: [{ title: "Profile — VertX Field" }] }),
@@ -25,6 +27,18 @@ type Node = ProfileRow & { roles: AppRole[]; stats: Stats; children: Node[] };
 
 function ProfilePage() {
   const auth = useAuth();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    await supabase.auth.signOut();
+    navigate({ to: "/auth", replace: true });
+  }
+
   const [me, setMe] = useState<ProfileRow | null>(null);
   const [tree, setTree] = useState<Node[]>([]);
   const [mineStats, setMineStats] = useState<Stats>({ leads: 0, runs: 0 });
@@ -146,6 +160,15 @@ function ProfilePage() {
           <StatChip icon={<MapPin className="h-3.5 w-3.5" />} label="Leads" value={mineStats.leads} />
           <StatChip icon={<RouteIcon className="h-3.5 w-3.5" />} label="Runs" value={mineStats.runs} />
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          className="mt-3 w-full"
+          onClick={handleSignOut}
+          disabled={signingOut}
+        >
+          {signingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <><LogOut className="mr-2 h-4 w-4" /> Sign out</>}
+        </Button>
       </section>
 
       {canSeeTeam && (

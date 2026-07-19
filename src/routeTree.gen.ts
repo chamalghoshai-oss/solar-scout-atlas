@@ -19,6 +19,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SimulatorIdRouteImport } from './routes/simulator.$id'
 import { Route as LeadsIdRouteImport } from './routes/leads.$id'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
+import { Route as ApiPublicBootstrapOwnerRouteImport } from './routes/api/public/bootstrap-owner'
 
 const SimulatorRoute = SimulatorRouteImport.update({
   id: '/simulator',
@@ -70,6 +71,11 @@ const AdminUsersRoute = AdminUsersRouteImport.update({
   path: '/admin/users',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicBootstrapOwnerRoute = ApiPublicBootstrapOwnerRouteImport.update({
+  id: '/api/public/bootstrap-owner',
+  path: '/api/public/bootstrap-owner',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -82,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AdminUsersRoute
   '/leads/$id': typeof LeadsIdRoute
   '/simulator/$id': typeof SimulatorIdRoute
+  '/api/public/bootstrap-owner': typeof ApiPublicBootstrapOwnerRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AdminUsersRoute
   '/leads/$id': typeof LeadsIdRoute
   '/simulator/$id': typeof SimulatorIdRoute
+  '/api/public/bootstrap-owner': typeof ApiPublicBootstrapOwnerRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -107,6 +115,7 @@ export interface FileRoutesById {
   '/admin/users': typeof AdminUsersRoute
   '/leads/$id': typeof LeadsIdRoute
   '/simulator/$id': typeof SimulatorIdRoute
+  '/api/public/bootstrap-owner': typeof ApiPublicBootstrapOwnerRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -121,6 +130,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/leads/$id'
     | '/simulator/$id'
+    | '/api/public/bootstrap-owner'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -133,6 +143,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/leads/$id'
     | '/simulator/$id'
+    | '/api/public/bootstrap-owner'
   id:
     | '__root__'
     | '/'
@@ -145,6 +156,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/leads/$id'
     | '/simulator/$id'
+    | '/api/public/bootstrap-owner'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -156,6 +168,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SimulatorRoute: typeof SimulatorRouteWithChildren
   AdminUsersRoute: typeof AdminUsersRoute
+  ApiPublicBootstrapOwnerRoute: typeof ApiPublicBootstrapOwnerRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -230,6 +243,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminUsersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/bootstrap-owner': {
+      id: '/api/public/bootstrap-owner'
+      path: '/api/public/bootstrap-owner'
+      fullPath: '/api/public/bootstrap-owner'
+      preLoaderRoute: typeof ApiPublicBootstrapOwnerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -264,6 +284,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SimulatorRoute: SimulatorRouteWithChildren,
   AdminUsersRoute: AdminUsersRoute,
+  ApiPublicBootstrapOwnerRoute: ApiPublicBootstrapOwnerRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

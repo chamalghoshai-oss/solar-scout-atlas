@@ -3,7 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export type AppRoleInput = "owner" | "manager" | "field_staff";
 
-export const DEFAULT_ACCESS_PASSWORD = "12345";
+export const DEFAULT_ACCESS_PASSWORD = "123456";
 
 export const createAccessUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
