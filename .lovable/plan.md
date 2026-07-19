@@ -1,70 +1,83 @@
-# Field Marketing & Solar Survey App — Plan
+## Goal
 
-A mobile-first PWA for VertX Energies field reps: track GPS routes, drop pins on potential houses, capture leads with photos, and follow up via WhatsApp Business — all without login.
+Make the app login-first. Every user (owner, manager, field staff) signs in with their email + password before seeing anything. Unauthenticated visitors only see the login page.
 
-## Screens
+## Behavior
 
-1. **Live Run (home)** — Google Map centered on your location, big "Start Marketing Run" button. While running:
-  - Live breadcrumb polyline drawn as you move (GPS sampled every few seconds).
-  - "Stop Run" + run duration / distance counter.
-  - Tap anywhere on the map → opens **Lead Capture** sheet with that coordinate.
-  - Long-press / "+" button → drop a **Potential House** pin (lighter, just a marker — no full form).
-2. **Atlas (coverage view)** — All-time map showing:
-  - Every past run's polyline overlaid, with **repeat segments colored hotter** (1× gray-blue, 2× orange, 3+× red) and a numeric badge on heavily repeated streets.
-  - Toggleable layers: Leads, Potential Houses, Visited/Not-Visited pins.
-  - "Gray = unvisited" naturally emerges: areas with no lines stand out.
-3. **Leads list** — Scrollable, filterable by Status (Interested / Not Home / Follow-up / Converted / Not Interested), sorted by recency or distance.
-4. **Lead Detail** — Photo, contact info, kW, notes, geotag mini-map, Status dropdown, Visited toggle, and a prominent **"Contact on WhatsApp"** button.
+- Visiting any URL while signed out redirects to `/auth`.
+- `/auth` shows a clean login form: **Email** + **Password** + Sign in.
+- Successful sign-in redirects to `/` (Run tab), or back to the page they tried to open.
+- The Profile page gets a **Sign out** button.
+- On sign-out, cache is cleared and the user is returned to `/auth`.
 
-## Lead Capture Form
+## Password rules
 
-- Auto-captured GPS coords (editable by dragging the pin).
-- Photo upload (camera or gallery; multiple photos, stored in Lovable Cloud Storage).
-- Name, Phone (with +91 default, validated).
-- Required kW (number), Notes (textarea).
-- Status dropdown: Interested / Not Home / Follow-up Required / Converted / Not Interested.
-- Type: **Lead** (full form) vs **Potential House** (just pin + optional note, upgradeable to full lead later).
-- Visited toggle (auto-true on save, can flip later).
+Supabase enforces a minimum password length of **6 characters**, so `12345` will be rejected when creating users. Two options:
 
-## WhatsApp Integration
+- **Recommended:** change default password to `123456` (6 chars).
+- Alternative: keep `12345` — I'll only be able to do this if you're OK relaxing the Supabase minimum; not all projects allow lowering it below 6.
 
-"Contact on WhatsApp" opens `https://wa.me/<phone>?text=<encoded>` with template:
+I'll go with `123456` unless you say otherwise.
 
-> Hi {name}, this is Aureon from VertX Energies. I am following up on our chat about the {kW}kW solar system for your site...
+## What changes
 
-Editable in a Settings page so you can tweak the script without redeploys.
+### 1. Route structure
+- Create `src/routes/_authenticated/route.tsx` — pathless layout that redirects to `/auth` when there's no Supabase session.
+- Move every current app route file into `src/routes/_authenticated/`:
+  - `index.tsx`, `atlas.tsx`, `leads.tsx`, `leads.$id.tsx`, `profile.tsx`, `settings.tsx`, `admin.users.tsx`, `simulator.tsx`, `simulator.$id.tsx`
+- `/auth` stays public.
 
-## Atlas: how repeat routes are detected
+### 2. Login page (`src/routes/auth.tsx`)
+- Replace the current redirect stub with a real form.
+- Email + password inputs, validated with zod (email format, password ≥ 6).
+- Calls `supabase.auth.signInWithPassword`.
+- Shows friendly error for wrong credentials.
+- If already signed in, redirects to `/`.
+- Optional "Forgot password?" text — for now just tells the user to ask their owner/manager to reset it (matches existing "Reset to default password" flow in Admin).
 
-GPS points snapped to a coarse grid (~20 m cells). Each cell tracks visit count across all runs. The map overlay colors polylines by the max cell-count they pass through, with a small numeric badge for cells visited 3+ times. This gives you the "don't knock the same door twice / don't skip a street" view you asked for.
+### 3. Sign-out
+- Add a **Sign out** button on `/profile`.
+- Calls `queryClient.cancelQueries()` → `clear()` → `supabase.auth.signOut()` → navigate to `/auth` with `replace: true`.
 
-## Tech / data
+### 4. Default password
+- Update `DEFAULT_ACCESS_PASSWORD` in `src/lib/users.functions.ts` from `12345` to `123456`.
+- Admin UI hint text and toasts already reference the constant, so they update automatically.
 
-- **Backend:** Lovable Cloud (auto-provisioned) for leads, runs, GPS points, photos, settings. No login — a device-local anonymous ID identifies your data.
-- **Map:** Google Maps via the Google Maps connector (you'll be prompted to connect it; the managed key works on `*.lovable.app`).
-- **PWA:** installable on Android home screen, works with intermittent connectivity (queued writes sync when online).
+### 5. Owner bootstrap
+- `chamalghosh.ai@gmail.com` is already the seeded owner in `authorized_emails` / `handle_new_user` trigger.
+- I'll run one migration to (re)set that owner's auth password to `123456` so you can log in immediately with `chamalghosh.ai@gmail.com` / `123456`.
+
+## What does NOT change
+
+- RBAC and RLS policies stay exactly as they are.
+- Admin > Users flow (create manager/staff, reset password) stays the same — just uses the new default password.
+- Google sign-in is **removed from the flow** (email/password only), per your request that "email id is user id". Let me know if you also want the Google button kept as an option.
 
 ## Technical details
 
-- Tables: `runs`, `run_points` (run_id, lat, lng, ts), `leads` (with type='lead'|'potential', status, kW, notes, phone, name, geotag, photos[]), `settings` (whatsapp_template, sender_name).
-- Storage bucket `lead-photos` (public read for simplicity; signed URLs if you prefer).
-- Routes: `/` (Live Run), `/atlas`, `/leads`, `/leads/$id`, `/settings`.
-- GPS: `navigator.geolocation.watchPosition` with high accuracy; throttled writes (every ~5 s or ~10 m moved).
-- Repeat-heat: client-side aggregation of `run_points` into a grid (geohash precision 7) on Atlas load, cached.
-- WhatsApp link: `wa.me` works for both WhatsApp and WhatsApp Business on the device.
-- Mobile-first layout, bottom tab nav (Run / Atlas / Leads / Settings).
+```text
+src/routes/
+├── auth.tsx                       ← public login page
+└── _authenticated/
+    ├── route.tsx                  ← redirect to /auth if no session
+    ├── index.tsx                  (moved)
+    ├── atlas.tsx                  (moved)
+    ├── leads.tsx                  (moved)
+    ├── leads.$id.tsx              (moved)
+    ├── profile.tsx                (moved + Sign out button)
+    ├── settings.tsx               (moved)
+    ├── admin.users.tsx            (moved)
+    ├── simulator.tsx              (moved)
+    └── simulator.$id.tsx          (moved)
+```
 
-## Out of scope (ask later if you want them)
+The `_authenticated` layout uses `ssr: false` + `supabase.auth.getUser()` in `beforeLoad`, matching Lovable's Supabase integration pattern. This avoids SSR redirect loops because the session is in browser localStorage.
 
-- Multi-rep team view / admin dashboard.
-- Offline-first sync beyond simple queueing.
-- Auto-generated proposal PDFs.
-- Importing leads from a CSV.
+Root `onAuthStateChange` in `__root.tsx` already invalidates the router on `SIGNED_IN` / `SIGNED_OUT` — I'll verify it's wired; if not, add it in the same pass.
 
-Confirm and I'll build it. If you have a preferred WhatsApp template wording or sender name different from "Aureon / VertX Energies", drop it in the reply and I'll bake it in as the default.
+Migration: `UPDATE auth.users SET encrypted_password = crypt('123456', gen_salt('bf')) WHERE email = 'chamalghosh.ai@gmail.com';` (Supabase supports this via the admin API — I'll actually use `supabaseAdmin.auth.admin.updateUserById` inside a one-shot server function, or a SQL migration using `crypt`, whichever is cleaner).
 
-&nbsp;
+## Confirm before I build
 
-&nbsp;
-
-Also add geo tag picture option
+1. OK with default password `123456` (6 chars) instead of `12345`?
+2. Remove Google sign-in entirely, or keep it as a secondary button below email/password?
