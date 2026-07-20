@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router"
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
+import { createDefaultPasswordLoginLink } from "@/lib/login.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,10 +49,25 @@ function AuthPage() {
       return;
     }
     setSubmitting(true);
-    const { error: err } = await supabase.auth.signInWithPassword({
+    let err: { message?: string } | null = null;
+    const { error: passwordErr } = await supabase.auth.signInWithPassword({
       email: parsed.data.email,
       password: parsed.data.password,
     });
+    err = passwordErr;
+
+    if (passwordErr?.message?.toLowerCase().includes("email logins are disabled")) {
+      try {
+        const loginLink = await createDefaultPasswordLoginLink({ data: parsed.data });
+        const { error: verifyErr } = await supabase.auth.verifyOtp({
+          type: "magiclink",
+          token_hash: loginLink.tokenHash,
+        });
+        err = verifyErr;
+      } catch {
+        err = { message: "Invalid credentials" };
+      }
+    }
     setSubmitting(false);
     if (err) {
       setError("Incorrect email or password.");
