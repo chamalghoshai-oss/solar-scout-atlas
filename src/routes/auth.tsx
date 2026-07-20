@@ -61,7 +61,6 @@ function AuthPage() {
         const loginLink = await createDefaultPasswordLoginLink({ data: parsed.data });
         const { error: verifyErr } = await supabase.auth.verifyOtp({
           type: "magiclink",
-          email: loginLink.email,
           token_hash: loginLink.tokenHash,
         });
         err = verifyErr;
