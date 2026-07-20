@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { DEFAULT_ACCESS_PASSWORD } from "@/lib/users.functions";
+
+const DEFAULT_LOGIN_PASSWORD = "123456";
 
 const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(255),
@@ -10,7 +11,7 @@ const loginSchema = z.object({
 export const createDefaultPasswordLoginLink = createServerFn({ method: "POST" })
   .inputValidator((data) => loginSchema.parse(data))
   .handler(async ({ data }) => {
-    if (data.password !== DEFAULT_ACCESS_PASSWORD) {
+    if (data.password !== DEFAULT_LOGIN_PASSWORD) {
       throw new Error("Invalid credentials");
     }
 
