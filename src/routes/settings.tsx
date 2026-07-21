@@ -55,8 +55,11 @@ function SettingsPage() {
   async function save() {
     setSaving(true);
     const device = getDeviceId();
+    const uid = (await supabase.auth.getSession()).data.session?.user?.id;
+    if (!uid) { setSaving(false); toast.error("Please sign in again"); return; }
     const { error } = await supabase.from("settings").upsert({
       device_id: device,
+      user_id: uid,
       sender_name: sender.trim() || "Aureon",
       company_name: company.trim() || "VertX Energies",
       whatsapp_template: template.trim() || DEFAULT_TEMPLATE,
