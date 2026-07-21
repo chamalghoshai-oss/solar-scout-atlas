@@ -207,7 +207,7 @@ function ProfilePage() {
 function TreeNode({ node, depth }: { node: Node; depth: number }) {
   const [open, setOpen] = useState(true);
   const hasKids = node.children.length > 0;
-  const primary: AppRole = node.roles[0] ?? "field_staff";
+  const primary: AppRole = node.roles.includes("owner") ? "owner" : node.roles.includes("manager") ? "manager" : "field_staff";
   return (
     <li>
       <div
