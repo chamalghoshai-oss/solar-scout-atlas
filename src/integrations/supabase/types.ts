@@ -105,7 +105,7 @@ export type Database = {
           status: string
           type: string
           updated_at: string
-          user_id: string | null
+          user_id: string
           visited: boolean
         }
         Insert: {
@@ -123,7 +123,7 @@ export type Database = {
           status?: string
           type?: string
           updated_at?: string
-          user_id?: string | null
+          user_id: string
           visited?: boolean
         }
         Update: {
@@ -141,7 +141,7 @@ export type Database = {
           status?: string
           type?: string
           updated_at?: string
-          user_id?: string | null
+          user_id?: string
           visited?: boolean
         }
         Relationships: []
@@ -202,7 +202,7 @@ export type Database = {
           lng: number
           run_id: string
           ts: string
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           accuracy?: number | null
@@ -212,7 +212,7 @@ export type Database = {
           lng: number
           run_id: string
           ts?: string
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           accuracy?: number | null
@@ -222,7 +222,7 @@ export type Database = {
           lng?: number
           run_id?: string
           ts?: string
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: [
           {
@@ -242,7 +242,7 @@ export type Database = {
           ended_at: string | null
           id: string
           started_at: string
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           created_at?: string
@@ -251,7 +251,7 @@ export type Database = {
           ended_at?: string | null
           id?: string
           started_at?: string
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           created_at?: string
@@ -260,7 +260,7 @@ export type Database = {
           ended_at?: string | null
           id?: string
           started_at?: string
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -270,7 +270,7 @@ export type Database = {
           device_id: string
           sender_name: string
           updated_at: string
-          user_id: string | null
+          user_id: string
           whatsapp_template: string
         }
         Insert: {
@@ -278,7 +278,7 @@ export type Database = {
           device_id: string
           sender_name?: string
           updated_at?: string
-          user_id?: string | null
+          user_id: string
           whatsapp_template?: string
         }
         Update: {
@@ -286,7 +286,7 @@ export type Database = {
           device_id?: string
           sender_name?: string
           updated_at?: string
-          user_id?: string | null
+          user_id?: string
           whatsapp_template?: string
         }
         Relationships: []

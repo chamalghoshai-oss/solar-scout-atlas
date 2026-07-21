@@ -1,83 +1,43 @@
 ## Goal
+Replace the device-scoped RLS on `leads`, `runs`, `run_points`, and `settings` with role-scoped policies so:
+- **Field staff** see only their own data.
+- **Managers** see their own + their direct reports' data (via `profiles.manager_id`), can edit their reports' data, cannot see peers/owners.
+- **Owners** see and manage everything.
 
-Make the app login-first. Every user (owner, manager, field staff) signs in with their email + password before seeing anything. Unauthenticated visitors only see the login page.
+Access-management (`authorized_emails`) and profile-visibility policies already match this hierarchy — no changes there.
 
-## Behavior
+## Current state (verified)
+- `leads`, `runs`, `run_points`, `settings` still have four permissive `Direct device access …` policies each, granted to `anon` + `authenticated`, gated only by `device_id IS NOT NULL`. Any signed-in user sees all rows.
+- `user_id` columns exist on all four tables but are **nullable**; inserts in `src/routes/index.tsx` and `src/routes/atlas.tsx` already pass `user_id` from the session.
+- `has_role`, `is_owner`, `is_manager`, `manages_user(_manager_id, _staff_id)` helpers already exist.
+- Anon access to app data is no longer needed — sign-in is mandatory (`AuthGate` in `__root.tsx`).
 
-- Visiting any URL while signed out redirects to `/auth`.
-- `/auth` shows a clean login form: **Email** + **Password** + Sign in.
-- Successful sign-in redirects to `/` (Run tab), or back to the page they tried to open.
-- The Profile page gets a **Sign out** button.
-- On sign-out, cache is cleared and the user is returned to `/auth`.
+## Plan
 
-## Password rules
+### 1. Migration: role-scoped RLS
+For `leads`, `runs`, `run_points`, `settings`:
 
-Supabase enforces a minimum password length of **6 characters**, so `12345` will be rejected when creating users. Two options:
+1. Drop the four `Direct device access …` policies.
+2. Revoke table privileges from `anon` (keep `authenticated` + `service_role`).
+3. Backfill: `UPDATE … SET user_id = <first owner id> WHERE user_id IS NULL` so legacy rows remain visible to the owner only.
+4. Make `user_id` `NOT NULL` and default nothing (app supplies it).
+5. New policies (all `TO authenticated`):
+   - `SELECT`: `user_id = auth.uid() OR public.manages_user(auth.uid(), user_id) OR public.is_owner(auth.uid())`
+   - `INSERT` `WITH CHECK`: `user_id = auth.uid() OR public.is_owner(auth.uid())`
+   - `UPDATE` `USING`/`WITH CHECK`: same expression as SELECT / INSERT respectively
+   - `DELETE` `USING`: same as SELECT
+6. `settings` is per-user — restrict SELECT/UPDATE/DELETE to `user_id = auth.uid() OR is_owner(auth.uid())` (managers don't need staff device settings).
 
-- **Recommended:** change default password to `123456` (6 chars).
-- Alternative: keep `12345` — I'll only be able to do this if you're OK relaxing the Supabase minimum; not all projects allow lowering it below 6.
+### 2. Client code cleanup
+- `src/routes/index.tsx`, `src/routes/atlas.tsx`, `src/routes/leads.tsx`: keep `device_id` for grouping but stop filtering queries by device — rely on RLS. Ensure every insert path sets `user_id` to the current session user (block insert if no session, since auth is required).
+- `src/lib/device.ts`: unchanged (still used for `device_id` metadata).
+- No UI copy changes required.
 
-I'll go with `123456` unless you say otherwise.
+### 3. Verification
+- Run `supabase--linter` after migration.
+- Log in as owner → sees all leads/runs.
+- Confirm existing (pre-auth) rows are attributed to the owner and remain visible.
 
-## What changes
-
-### 1. Route structure
-- Create `src/routes/_authenticated/route.tsx` — pathless layout that redirects to `/auth` when there's no Supabase session.
-- Move every current app route file into `src/routes/_authenticated/`:
-  - `index.tsx`, `atlas.tsx`, `leads.tsx`, `leads.$id.tsx`, `profile.tsx`, `settings.tsx`, `admin.users.tsx`, `simulator.tsx`, `simulator.$id.tsx`
-- `/auth` stays public.
-
-### 2. Login page (`src/routes/auth.tsx`)
-- Replace the current redirect stub with a real form.
-- Email + password inputs, validated with zod (email format, password ≥ 6).
-- Calls `supabase.auth.signInWithPassword`.
-- Shows friendly error for wrong credentials.
-- If already signed in, redirects to `/`.
-- Optional "Forgot password?" text — for now just tells the user to ask their owner/manager to reset it (matches existing "Reset to default password" flow in Admin).
-
-### 3. Sign-out
-- Add a **Sign out** button on `/profile`.
-- Calls `queryClient.cancelQueries()` → `clear()` → `supabase.auth.signOut()` → navigate to `/auth` with `replace: true`.
-
-### 4. Default password
-- Update `DEFAULT_ACCESS_PASSWORD` in `src/lib/users.functions.ts` from `12345` to `123456`.
-- Admin UI hint text and toasts already reference the constant, so they update automatically.
-
-### 5. Owner bootstrap
-- `chamalghosh.ai@gmail.com` is already the seeded owner in `authorized_emails` / `handle_new_user` trigger.
-- I'll run one migration to (re)set that owner's auth password to `123456` so you can log in immediately with `chamalghosh.ai@gmail.com` / `123456`.
-
-## What does NOT change
-
-- RBAC and RLS policies stay exactly as they are.
-- Admin > Users flow (create manager/staff, reset password) stays the same — just uses the new default password.
-- Google sign-in is **removed from the flow** (email/password only), per your request that "email id is user id". Let me know if you also want the Google button kept as an option.
-
-## Technical details
-
-```text
-src/routes/
-├── auth.tsx                       ← public login page
-└── _authenticated/
-    ├── route.tsx                  ← redirect to /auth if no session
-    ├── index.tsx                  (moved)
-    ├── atlas.tsx                  (moved)
-    ├── leads.tsx                  (moved)
-    ├── leads.$id.tsx              (moved)
-    ├── profile.tsx                (moved + Sign out button)
-    ├── settings.tsx               (moved)
-    ├── admin.users.tsx            (moved)
-    ├── simulator.tsx              (moved)
-    └── simulator.$id.tsx          (moved)
-```
-
-The `_authenticated` layout uses `ssr: false` + `supabase.auth.getUser()` in `beforeLoad`, matching Lovable's Supabase integration pattern. This avoids SSR redirect loops because the session is in browser localStorage.
-
-Root `onAuthStateChange` in `__root.tsx` already invalidates the router on `SIGNED_IN` / `SIGNED_OUT` — I'll verify it's wired; if not, add it in the same pass.
-
-Migration: `UPDATE auth.users SET encrypted_password = crypt('123456', gen_salt('bf')) WHERE email = 'chamalghosh.ai@gmail.com';` (Supabase supports this via the admin API — I'll actually use `supabaseAdmin.auth.admin.updateUserById` inside a one-shot server function, or a SQL migration using `crypt`, whichever is cleaner).
-
-## Confirm before I build
-
-1. OK with default password `123456` (6 chars) instead of `12345`?
-2. Remove Google sign-in entirely, or keep it as a secondary button below email/password?
+## Out of scope
+- Manager ↔ staff assignment UI (`profiles.manager_id` is already writable by owners via existing profile policy; assigning managers to staff can be a follow-up).
+- Changes to `authorized_emails`, `profiles`, `user_roles`, `audit_log` policies (already role-scoped correctly).

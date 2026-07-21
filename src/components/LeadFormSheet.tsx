@@ -82,9 +82,11 @@ export function LeadFormSheet({
     if (!draft) return;
     setBusy(true);
     try {
+      const uid = (await supabase.auth.getSession()).data.session?.user?.id;
+      if (!uid) throw new Error("Please sign in again");
       const payload = {
         device_id: getDeviceId(),
-        user_id: (await supabase.auth.getSession()).data.session?.user?.id ?? null,
+        user_id: uid,
         type: draft.type,
         lat: draft.lat,
         lng: draft.lng,

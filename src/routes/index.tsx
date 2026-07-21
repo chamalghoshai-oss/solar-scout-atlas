@@ -313,7 +313,8 @@ function LiveRun() {
   }
 
   async function startRun() {
-    const uid = (await supabase.auth.getSession()).data.session?.user?.id ?? null;
+    const uid = (await supabase.auth.getSession()).data.session?.user?.id;
+    if (!uid) { toast.error("Please sign in again"); return; }
     const { data, error } = await supabase.from("runs").insert({ device_id: getDeviceId(), user_id: uid }).select("id").single();
     if (error || !data) {
       toast.error("Could not start run");
@@ -363,10 +364,12 @@ function LiveRun() {
     setPoints((n) => n + 1);
     const rid = runIdRef.current;
     if (!rid) return;
+    const uid = (await supabase.auth.getSession()).data.session?.user?.id;
+    if (!uid) return;
     await supabase.from("run_points").insert({
       run_id: rid,
       device_id: getDeviceId(),
-      user_id: (await supabase.auth.getSession()).data.session?.user?.id ?? null,
+      user_id: uid,
       lat: c.lat,
       lng: c.lng,
       accuracy: pos.coords.accuracy ?? null,
