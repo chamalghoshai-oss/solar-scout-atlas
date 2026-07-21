@@ -455,7 +455,8 @@ function AtlasPage() {
     try {
       const deviceId = getDeviceId();
       const { data: userData } = await supabase.auth.getUser();
-      const userId = userData.user?.id ?? null;
+      const userId = userData.user?.id;
+      if (!userId) { toast.error("Please sign in again"); setSaving(false); return; }
 
       // Prefer the snapped (road-following) path if available.
       const pathToSave =
