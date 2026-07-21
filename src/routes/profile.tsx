@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth, ROLE_LABELS, type AppRole } from "@/lib/auth";
-import { Loader2, User, Mail, Phone, Shield, Users as UsersIcon, ChevronRight, MapPin, Route as RouteIcon, LogOut } from "lucide-react";
+import { Loader2, User, Mail, Phone, Shield, Users as UsersIcon, ChevronRight, MapPin, Route as RouteIcon, LogOut, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/profile")({
@@ -136,7 +136,7 @@ function ProfilePage() {
     );
   }
 
-  const primaryRole: AppRole = auth.roles[0] ?? "field_staff";
+  const primaryRole: AppRole = auth.isOwner ? "owner" : auth.isManager ? "manager" : "field_staff";
   const canSeeTeam = auth.isOwner || auth.isManager;
 
   return (
@@ -172,6 +172,19 @@ function ProfilePage() {
       </section>
 
       {canSeeTeam && (
+        <Link
+          to="/admin/users"
+          className="mb-4 flex items-center justify-between rounded-xl border border-border bg-card p-4 text-sm font-medium hover:bg-muted"
+        >
+          <span className="inline-flex items-center gap-2">
+            <UserPlus className="h-4 w-4 text-primary" />
+            {auth.isOwner ? "Create manager or field staff access" : "Create field staff access"}
+          </span>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        </Link>
+      )}
+
+      {canSeeTeam && (
         <section>
           <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
             <UsersIcon className="h-4 w-4" /> Hierarchy · view only
@@ -194,7 +207,7 @@ function ProfilePage() {
 function TreeNode({ node, depth }: { node: Node; depth: number }) {
   const [open, setOpen] = useState(true);
   const hasKids = node.children.length > 0;
-  const primary: AppRole = node.roles[0] ?? "field_staff";
+  const primary: AppRole = node.roles.includes("owner") ? "owner" : node.roles.includes("manager") ? "manager" : "field_staff";
   return (
     <li>
       <div
