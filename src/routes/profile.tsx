@@ -157,8 +157,12 @@ function ProfilePage() {
         <Row icon={<Shield className="h-4 w-4" />} label="Access" value={auth.roles.map((r) => ROLE_LABELS[r]).join(", ") || "—"} />
         <Row icon={<User className="h-4 w-4" />} label="Status" value={me?.status ?? "active"} />
         <div className="mt-2 grid grid-cols-2 gap-2 pt-2">
-          <StatChip icon={<MapPin className="h-3.5 w-3.5" />} label="Leads" value={mineStats.leads} />
-          <StatChip icon={<RouteIcon className="h-3.5 w-3.5" />} label="Runs" value={mineStats.runs} />
+          <Link to="/profile/$userId" params={{ userId: auth.userId! }}>
+            <StatChip icon={<MapPin className="h-3.5 w-3.5" />} label="Leads" value={mineStats.leads} />
+          </Link>
+          <Link to="/profile/$userId" params={{ userId: auth.userId! }}>
+            <StatChip icon={<RouteIcon className="h-3.5 w-3.5" />} label="Runs" value={mineStats.runs} />
+          </Link>
         </div>
         <Button
           type="button"
