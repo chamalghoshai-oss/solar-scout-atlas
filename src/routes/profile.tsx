@@ -214,10 +214,7 @@ function TreeNode({ node, depth }: { node: Node; depth: number }) {
   const primary: AppRole = node.roles.includes("owner") ? "owner" : node.roles.includes("manager") ? "manager" : "field_staff";
   return (
     <li>
-      <div
-        className="rounded-xl border border-border bg-card p-3"
-        style={{ marginLeft: depth * 12 }}
-      >
+      <div className="rounded-xl border border-border bg-card p-3" style={{ marginLeft: depth * 12 }}>
         <div className="flex items-center gap-2">
           {hasKids ? (
             <button
@@ -231,16 +228,23 @@ function TreeNode({ node, depth }: { node: Node; depth: number }) {
           ) : (
             <span className="h-6 w-6 flex-none" />
           )}
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold">{node.full_name ?? node.email}</p>
-            <p className="truncate text-[11px] text-muted-foreground">
-              {node.email}
-              {node.designation ? ` · ${node.designation}` : ""}
-            </p>
-          </div>
-          <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
-            {ROLE_LABELS[primary]}
-          </span>
+          <Link
+            to="/profile/$userId"
+            params={{ userId: node.id }}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-md hover:bg-muted/60"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">{node.full_name ?? node.email}</p>
+              <p className="truncate text-[11px] text-muted-foreground">
+                {node.email}
+                {node.designation ? ` · ${node.designation}` : ""}
+              </p>
+            </div>
+            <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
+              {ROLE_LABELS[primary]}
+            </span>
+            <ChevronRight className="h-4 w-4 flex-none text-muted-foreground" />
+          </Link>
         </div>
         <div className="mt-2 flex flex-wrap gap-3 pl-8 text-[11px] text-muted-foreground">
           <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {node.stats.leads} leads</span>
