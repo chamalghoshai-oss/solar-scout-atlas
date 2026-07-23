@@ -165,6 +165,15 @@ function TeamMemberProfile() {
       </Section>
 
       <Section title="Runs" icon={<RouteIcon className="h-4 w-4" />} count={runs.length}>
+        {runs.length > 0 && (
+          <Link
+            to="/atlas"
+            search={{ userId }}
+            className="mb-2 inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted"
+          >
+            <MapPin className="h-3.5 w-3.5" /> View routes on Atlas
+          </Link>
+        )}
         {runs.length === 0 ? (
           <Empty text="No runs yet." />
         ) : (

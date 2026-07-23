@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { z } from "zod";
 import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { loadMaps, loadDrawing, cellKey } from "@/lib/gmaps";
@@ -16,6 +17,7 @@ import { DEFAULT_SCOPE_ID, SCOPES, getScope, inScope, scopeToLatLngBounds } from
 import { loadBoundaryGeoJSON } from "@/lib/boundaries";
 
 export const Route = createFileRoute("/atlas")({
+  validateSearch: (s) => z.object({ userId: z.string().uuid().optional() }).parse(s),
   head: () => ({
     meta: [
       { title: "Atlas — Coverage Map" },
@@ -28,6 +30,7 @@ export const Route = createFileRoute("/atlas")({
 });
 
 function AtlasPage() {
+  const { userId: viewUserId } = Route.useSearch();
   const mapEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const navigate = useNavigate();
@@ -116,11 +119,14 @@ function AtlasPage() {
   }
 
   async function draw(map: google.maps.Map) {
-    const [runsR, pointsR, leadsR] = await Promise.all([
-      supabase.from("runs").select("id,distance_m,started_at,ended_at"),
-      supabase.from("run_points").select("run_id,lat,lng,ts").order("ts", { ascending: true }).limit(20000),
-      supabase.from("leads").select("id,lat,lng,type,status,name"),
-    ]);
+    const runsQ = supabase.from("runs").select("id,distance_m,started_at,ended_at");
+    const leadsQ = supabase.from("leads").select("id,lat,lng,type,status,name");
+    if (viewUserId) { runsQ.eq("user_id", viewUserId); leadsQ.eq("user_id", viewUserId); }
+    const [runsR, leadsR] = await Promise.all([runsQ, leadsQ]);
+    const runIds = (runsR.data ?? []).map((r) => r.id);
+    const pointsR = runIds.length
+      ? await supabase.from("run_points").select("run_id,lat,lng,ts").in("run_id", runIds).order("ts", { ascending: true }).limit(20000)
+      : { data: [] as { run_id: string; lat: number; lng: number; ts: string }[] };
 
     const runs = runsR.data ?? [];
     const points = pointsR.data ?? [];
