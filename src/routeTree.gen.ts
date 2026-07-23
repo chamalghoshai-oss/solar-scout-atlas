@@ -62,9 +62,9 @@ const SimulatorIdRoute = SimulatorIdRouteImport.update({
   getParentRoute: () => SimulatorRoute,
 } as any)
 const ProfileUserIdRoute = ProfileUserIdRouteImport.update({
-  id: '/profile/$userId',
-  path: '/profile/$userId',
-  getParentRoute: () => rootRouteImport,
+  id: '/$userId',
+  path: '/$userId',
+  getParentRoute: () => ProfileRoute,
 } as any)
 const LeadsIdRoute = LeadsIdRouteImport.update({
   id: '/$id',
@@ -167,7 +167,6 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SimulatorRoute: typeof SimulatorRouteWithChildren
   AdminUsersRoute: typeof AdminUsersRoute
-  ProfileUserIdRoute: typeof ProfileUserIdRoute
   ProfileIndexRoute: typeof ProfileIndexRoute
 }
 
@@ -231,10 +230,10 @@ declare module '@tanstack/react-router' {
     }
     '/profile/$userId': {
       id: '/profile/$userId'
-      path: '/profile/$userId'
+      path: '/$userId'
       fullPath: '/profile/$userId'
       preLoaderRoute: typeof ProfileUserIdRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof ProfileRoute
     }
     '/leads/$id': {
       id: '/leads/$id'
@@ -283,9 +282,18 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SimulatorRoute: SimulatorRouteWithChildren,
   AdminUsersRoute: AdminUsersRoute,
-  ProfileUserIdRoute: ProfileUserIdRoute,
   ProfileIndexRoute: ProfileIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
