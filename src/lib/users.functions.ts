@@ -42,6 +42,15 @@ export const createAccessUser = createServerFn({ method: "POST" })
     });
     if (cErr && !/already/i.test(cErr.message)) throw new Error(cErr.message);
 
+    // Link the new profile to its creator so hierarchy/RLS is scoped correctly.
+    // Owners create managers (linked to owner); managers create field staff (linked to manager).
+    const { error: linkErr } = await supabaseAdmin
+      .from("profiles")
+      .update({ manager_id: context.userId })
+      .eq("email", data.email)
+      .is("manager_id", null);
+    if (linkErr) throw new Error(linkErr.message);
+
     return { ok: true, userId: created?.user?.id ?? null, defaultPassword: DEFAULT_ACCESS_PASSWORD };
   });
 
