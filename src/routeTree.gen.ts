@@ -11,11 +11,11 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SimulatorRouteImport } from './routes/simulator'
 import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as LeadsRouteImport } from './routes/leads'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AtlasRouteImport } from './routes/atlas'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ProfileIndexRouteImport } from './routes/profile.index'
 import { Route as SimulatorIdRouteImport } from './routes/simulator.$id'
 import { Route as ProfileUserIdRouteImport } from './routes/profile.$userId'
 import { Route as LeadsIdRouteImport } from './routes/leads.$id'
@@ -29,11 +29,6 @@ const SimulatorRoute = SimulatorRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProfileRoute = ProfileRouteImport.update({
-  id: '/profile',
-  path: '/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LeadsRoute = LeadsRouteImport.update({
@@ -56,15 +51,20 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProfileIndexRoute = ProfileIndexRouteImport.update({
+  id: '/profile/',
+  path: '/profile/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SimulatorIdRoute = SimulatorIdRouteImport.update({
   id: '/$id',
   path: '/$id',
   getParentRoute: () => SimulatorRoute,
 } as any)
 const ProfileUserIdRoute = ProfileUserIdRouteImport.update({
-  id: '/$userId',
-  path: '/$userId',
-  getParentRoute: () => ProfileRoute,
+  id: '/profile/$userId',
+  path: '/profile/$userId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const LeadsIdRoute = LeadsIdRouteImport.update({
   id: '/$id',
@@ -82,26 +82,26 @@ export interface FileRoutesByFullPath {
   '/atlas': typeof AtlasRoute
   '/auth': typeof AuthRoute
   '/leads': typeof LeadsRouteWithChildren
-  '/profile': typeof ProfileRouteWithChildren
   '/settings': typeof SettingsRoute
   '/simulator': typeof SimulatorRouteWithChildren
   '/admin/users': typeof AdminUsersRoute
   '/leads/$id': typeof LeadsIdRoute
   '/profile/$userId': typeof ProfileUserIdRoute
   '/simulator/$id': typeof SimulatorIdRoute
+  '/profile/': typeof ProfileIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/atlas': typeof AtlasRoute
   '/auth': typeof AuthRoute
   '/leads': typeof LeadsRouteWithChildren
-  '/profile': typeof ProfileRouteWithChildren
   '/settings': typeof SettingsRoute
   '/simulator': typeof SimulatorRouteWithChildren
   '/admin/users': typeof AdminUsersRoute
   '/leads/$id': typeof LeadsIdRoute
   '/profile/$userId': typeof ProfileUserIdRoute
   '/simulator/$id': typeof SimulatorIdRoute
+  '/profile': typeof ProfileIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -109,13 +109,13 @@ export interface FileRoutesById {
   '/atlas': typeof AtlasRoute
   '/auth': typeof AuthRoute
   '/leads': typeof LeadsRouteWithChildren
-  '/profile': typeof ProfileRouteWithChildren
   '/settings': typeof SettingsRoute
   '/simulator': typeof SimulatorRouteWithChildren
   '/admin/users': typeof AdminUsersRoute
   '/leads/$id': typeof LeadsIdRoute
   '/profile/$userId': typeof ProfileUserIdRoute
   '/simulator/$id': typeof SimulatorIdRoute
+  '/profile/': typeof ProfileIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -124,39 +124,39 @@ export interface FileRouteTypes {
     | '/atlas'
     | '/auth'
     | '/leads'
-    | '/profile'
     | '/settings'
     | '/simulator'
     | '/admin/users'
     | '/leads/$id'
     | '/profile/$userId'
     | '/simulator/$id'
+    | '/profile/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/atlas'
     | '/auth'
     | '/leads'
-    | '/profile'
     | '/settings'
     | '/simulator'
     | '/admin/users'
     | '/leads/$id'
     | '/profile/$userId'
     | '/simulator/$id'
+    | '/profile'
   id:
     | '__root__'
     | '/'
     | '/atlas'
     | '/auth'
     | '/leads'
-    | '/profile'
     | '/settings'
     | '/simulator'
     | '/admin/users'
     | '/leads/$id'
     | '/profile/$userId'
     | '/simulator/$id'
+    | '/profile/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -164,10 +164,11 @@ export interface RootRouteChildren {
   AtlasRoute: typeof AtlasRoute
   AuthRoute: typeof AuthRoute
   LeadsRoute: typeof LeadsRouteWithChildren
-  ProfileRoute: typeof ProfileRouteWithChildren
   SettingsRoute: typeof SettingsRoute
   SimulatorRoute: typeof SimulatorRouteWithChildren
   AdminUsersRoute: typeof AdminUsersRoute
+  ProfileUserIdRoute: typeof ProfileUserIdRoute
+  ProfileIndexRoute: typeof ProfileIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -184,13 +185,6 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/profile': {
-      id: '/profile'
-      path: '/profile'
-      fullPath: '/profile'
-      preLoaderRoute: typeof ProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/leads': {
@@ -221,6 +215,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/profile/': {
+      id: '/profile/'
+      path: '/profile'
+      fullPath: '/profile/'
+      preLoaderRoute: typeof ProfileIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/simulator/$id': {
       id: '/simulator/$id'
       path: '/$id'
@@ -230,10 +231,10 @@ declare module '@tanstack/react-router' {
     }
     '/profile/$userId': {
       id: '/profile/$userId'
-      path: '/$userId'
+      path: '/profile/$userId'
       fullPath: '/profile/$userId'
       preLoaderRoute: typeof ProfileUserIdRouteImport
-      parentRoute: typeof ProfileRoute
+      parentRoute: typeof rootRouteImport
     }
     '/leads/$id': {
       id: '/leads/$id'
@@ -262,17 +263,6 @@ const LeadsRouteChildren: LeadsRouteChildren = {
 
 const LeadsRouteWithChildren = LeadsRoute._addFileChildren(LeadsRouteChildren)
 
-interface ProfileRouteChildren {
-  ProfileUserIdRoute: typeof ProfileUserIdRoute
-}
-
-const ProfileRouteChildren: ProfileRouteChildren = {
-  ProfileUserIdRoute: ProfileUserIdRoute,
-}
-
-const ProfileRouteWithChildren =
-  ProfileRoute._addFileChildren(ProfileRouteChildren)
-
 interface SimulatorRouteChildren {
   SimulatorIdRoute: typeof SimulatorIdRoute
 }
@@ -290,21 +280,12 @@ const rootRouteChildren: RootRouteChildren = {
   AtlasRoute: AtlasRoute,
   AuthRoute: AuthRoute,
   LeadsRoute: LeadsRouteWithChildren,
-  ProfileRoute: ProfileRouteWithChildren,
   SettingsRoute: SettingsRoute,
   SimulatorRoute: SimulatorRouteWithChildren,
   AdminUsersRoute: AdminUsersRoute,
+  ProfileUserIdRoute: ProfileUserIdRoute,
+  ProfileIndexRoute: ProfileIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

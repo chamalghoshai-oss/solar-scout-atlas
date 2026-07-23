@@ -7,7 +7,7 @@ import { useAuth, ROLE_LABELS, type AppRole } from "@/lib/auth";
 import { Loader2, User, Mail, Phone, Shield, Users as UsersIcon, ChevronRight, MapPin, Route as RouteIcon, LogOut, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export const Route = createFileRoute("/profile")({
+export const Route = createFileRoute("/profile/")({
   head: () => ({ meta: [{ title: "Profile — VertX Field" }] }),
   component: ProfilePage,
 });
