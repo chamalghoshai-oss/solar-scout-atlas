@@ -807,9 +807,9 @@ function statusColor(key: ReturnType<typeof statusKey>): string {
     : "#9ca3af";
 }
 
-function pinFor(type: string, status: string, name: string | null): google.maps.Icon {
+function pinFor(type: string, status: string, name: string | null, catColor?: string): google.maps.Icon {
   const key = type === "potential" ? "other" : statusKey(status);
-  const fill = type === "potential" ? "#3b82f6" : statusColor(key);
+  const fill = type === "potential" ? "#3b82f6" : catColor ?? statusColor(key);
   const isSquare = key === "reference";
   const label = (name ?? "").trim();
   const shape = isSquare
