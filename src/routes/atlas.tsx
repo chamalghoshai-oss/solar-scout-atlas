@@ -575,7 +575,46 @@ function AtlasPage() {
       const ok = !!p && inScope(scope, p.lat(), p.lng());
       m.setMap(showPotential && ok ? map : null);
     });
-  }, [showRuns, showHeat, showLeads, showPotential, statusFilter, scope]);
+    layersRef.current.customMarkers.forEach(({ marker, type }) => {
+      const p = marker.getPosition();
+      const ok = !!p && inScope(scope, p.lat(), p.lng());
+      marker.setMap(ok && (catFilter[type] ?? true) ? map : null);
+    });
+  }, [showRuns, showHeat, showLeads, showPotential, statusFilter, catFilter, scope, categories]);
+
+  async function addCategory() {
+    if (!newCatLabel.trim()) return;
+    setAddingCat(true);
+    try {
+      const cat = await createCategory(newCatLabel, newCatColor);
+      const next = [...categoriesRef.current, cat];
+      categoriesRef.current = next;
+      setCategories(next);
+      setCatFilter((f) => ({ ...f, [cat.key]: true }));
+      setNewCatLabel("");
+      setShowAddCat(false);
+      toast.success(`Category "${cat.label}" added`);
+      await refresh();
+    } catch (e) {
+      toast.error("Could not add category", { description: (e as Error).message });
+    } finally {
+      setAddingCat(false);
+    }
+  }
+
+  async function removeCategory(cat: LeadCategory) {
+    if (!confirm(`Delete the "${cat.label}" category? Existing pins stay but lose their colour.`)) return;
+    try {
+      await deleteCategory(cat.id);
+      const next = categoriesRef.current.filter((c) => c.id !== cat.id);
+      categoriesRef.current = next;
+      setCategories(next);
+      toast.success("Category deleted");
+      await refresh();
+    } catch (e) {
+      toast.error("Could not delete category", { description: (e as Error).message });
+    }
+  }
 
   useEffect(() => {
     if (!mapRef.current) return;
