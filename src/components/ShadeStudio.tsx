@@ -54,7 +54,7 @@ export function ShadeStudio({
   }, [playing]);
 
   const year = new Date().getFullYear();
-  const date = useMemo(() => dateFromDayHour(year, dayOfYear, hour), [year, dayOfYear, hour]);
+  const date = useMemo(() => dateFromDayHour(year, dayOfYear, hour, lng), [year, dayOfYear, hour, lng]);
   const pos = useMemo(() => sunPosition(date, lat, lng), [date, lat, lng]);
   const vec = useMemo(() => sunVector(pos, 80), [pos]);
   const shaded = isShaded(pos, obs);
@@ -90,7 +90,7 @@ export function ShadeStudio({
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-sm font-semibold">
             <Sun className="h-4 w-4 text-primary" />
-            {formatHour(hour)} · {date.toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+            {formatHour(hour)} · {new Date(Date.UTC(year, 0, 1) + (dayOfYear - 1) * 86400000).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" })}
           </div>
           <div className="flex items-center gap-2">
             <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${shaded ? "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300" : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"}`}>
