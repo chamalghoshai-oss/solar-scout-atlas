@@ -5,16 +5,24 @@ import { AppShell } from "@/components/AppShell";
 import { loadMaps, loadDrawing, cellKey } from "@/lib/gmaps";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
-import { Loader2, Layers, ChevronDown, ChevronUp, PenLine, Trash2, Check, X } from "lucide-react";
+import { Loader2, Layers, ChevronDown, ChevronUp, PenLine, Trash2, Check, X, Plus } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { computeRoute } from "@/lib/route.functions";
 import { ScopeSelector } from "@/components/ScopeSelector";
 import { DEFAULT_SCOPE_ID, SCOPES, getScope, inScope, scopeToLatLngBounds } from "@/lib/scopes";
 import { loadBoundaryGeoJSON } from "@/lib/boundaries";
+import {
+  CATEGORY_COLOR_CHOICES,
+  createCategory,
+  deleteCategory,
+  fetchCategories,
+  type LeadCategory,
+} from "@/lib/lead-categories";
 
 export const Route = createFileRoute("/atlas")({
   validateSearch: (s) => z.object({ userId: z.string().uuid().optional() }).parse(s),
@@ -39,7 +47,16 @@ function AtlasPage() {
     heatMarkers: google.maps.Marker[];
     leadMarkers: { marker: google.maps.Marker; status: string; type: string }[];
     potentialMarkers: google.maps.Marker[];
-  }>({ runLines: [], heatMarkers: [], leadMarkers: [], potentialMarkers: [] });
+    customMarkers: { marker: google.maps.Marker; type: string }[];
+  }>({ runLines: [], heatMarkers: [], leadMarkers: [], potentialMarkers: [], customMarkers: [] });
+
+  const [categories, setCategories] = useState<LeadCategory[]>([]);
+  const categoriesRef = useRef<LeadCategory[]>([]);
+  const [catFilter, setCatFilter] = useState<Record<string, boolean>>({});
+  const [newCatLabel, setNewCatLabel] = useState("");
+  const [newCatColor, setNewCatColor] = useState(CATEGORY_COLOR_CHOICES[0]);
+  const [addingCat, setAddingCat] = useState(false);
+  const [showAddCat, setShowAddCat] = useState(false);
 
   // Manual route builder state
   const buildLineRef = useRef<google.maps.Polyline | null>(null);
@@ -87,6 +104,11 @@ function AtlasPage() {
     (async () => {
       const { g } = await loadMaps();
       if (cancelled || !mapEl.current) return;
+      const cats = await fetchCategories();
+      if (cancelled) return;
+      categoriesRef.current = cats;
+      setCategories(cats);
+      setCatFilter(Object.fromEntries(cats.map((c) => [c.key, true])));
       const map = new g.maps.Map(mapEl.current, {
         center: { lat: 11.2588, lng: 75.7804 },
         zoom: 13,
@@ -112,10 +134,12 @@ function AtlasPage() {
     layersRef.current.heatMarkers.forEach((m) => m.setMap(null));
     layersRef.current.leadMarkers.forEach(({ marker }) => marker.setMap(null));
     layersRef.current.potentialMarkers.forEach((m) => m.setMap(null));
+    layersRef.current.customMarkers.forEach(({ marker }) => marker.setMap(null));
     layersRef.current.runLines = [];
     layersRef.current.heatMarkers = [];
     layersRef.current.leadMarkers = [];
     layersRef.current.potentialMarkers = [];
+    layersRef.current.customMarkers = [];
   }
 
   async function draw(map: google.maps.Map) {
@@ -209,11 +233,13 @@ function AtlasPage() {
     // lead pins
     for (const l of leads) {
       const isPot = l.type === "potential";
+      const isCustom = !isPot && l.type !== "lead";
+      const cat = isCustom ? categoriesRef.current.find((c) => c.key === l.type) : undefined;
       const m = new g.maps.Marker({
         position: { lat: Number(l.lat), lng: Number(l.lng) },
         map,
-        title: l.name ?? (isPot ? "Potential house" : "Lead"),
-        icon: pinFor(l.type as string, l.status as string, l.name ?? null),
+        title: l.name ?? (isPot ? "Potential house" : cat?.label ?? "Lead"),
+        icon: pinFor(l.type as string, l.status as string, l.name ?? null, cat?.color),
         label: undefined,
         zIndex: 200,
       });
@@ -224,6 +250,8 @@ function AtlasPage() {
       }
       if (isPot) {
         layersRef.current.potentialMarkers.push(m);
+      } else if (isCustom) {
+        layersRef.current.customMarkers.push({ marker: m, type: String(l.type) });
       } else {
         layersRef.current.leadMarkers.push({ marker: m, status: String(l.status), type: String(l.type) });
       }
