@@ -55,14 +55,16 @@ export function sunPosition(date: Date, lat: number, lng: number): SunPos {
   return { altitude, azimuth };
 }
 
-/** Local Date for a given day-of-year + decimal local hour, using the browser timezone. */
-export function dateFromDayHour(year: number, dayOfYear: number, hour: number): Date {
-  const base = new Date(year, 0, 1, 0, 0, 0, 0);
-  base.setDate(base.getDate() + Math.max(0, Math.round(dayOfYear) - 1));
-  const h = Math.floor(hour);
-  const m = Math.round((hour - h) * 60);
-  base.setHours(h, m, 0, 0);
-  return base;
+/**
+ * Date for a given day-of-year + decimal clock hour *at the site*, independent of
+ * the device timezone. The site offset is derived from its longitude (15° per hour),
+ * so 12:00 always means local midday-ish at the roof, not on the phone.
+ */
+export function dateFromDayHour(year: number, dayOfYear: number, hour: number, lng = 0): Date {
+  const offsetH = Math.round(lng / 15);
+  const dayIdx = Math.max(0, Math.round(dayOfYear) - 1);
+  const utcMs = Date.UTC(year, 0, 1) + dayIdx * DAY_MS + (hour - offsetH) * 3600000;
+  return new Date(utcMs);
 }
 
 /** Scene-space sun direction. Scene axes: +x = east, +z = south, +y = up. */
@@ -112,7 +114,8 @@ export function annualShade(lat: number, lng: number, obs: Obstruction, year = n
     let daylight = 0;
     let sunny = 0;
     for (let h = 6; h <= 18; h += 0.25) {
-      const d = new Date(year, m, 15, Math.floor(h), Math.round((h - Math.floor(h)) * 60));
+      const dayOfYear = Math.round((Date.UTC(year, m, 15) - Date.UTC(year, 0, 1)) / DAY_MS) + 1;
+      const d = dateFromDayHour(year, dayOfYear, h, lng);
       const p = sunPosition(d, lat, lng);
       if (p.altitude <= 0) continue;
       daylight++;
