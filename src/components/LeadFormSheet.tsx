@@ -12,7 +12,8 @@ import { uploadPhoto, type PhotoMeta } from "@/lib/photos";
 import { toast } from "sonner";
 
 export type LeadDraft = {
-  type: "lead" | "potential";
+  /** "lead", "potential", or a user-defined category key */
+  type: string;
   lat: number;
   lng: number;
 };
