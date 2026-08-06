@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { ScopeSelector } from "@/components/ScopeSelector";
 import { DEFAULT_SCOPE_ID, SCOPES, getScope, inScope, scopeToLatLngBounds } from "@/lib/scopes";
 import { loadBoundaryGeoJSON } from "@/lib/boundaries";
+import { fetchCategories, type LeadCategory } from "@/lib/lead-categories";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -55,8 +56,23 @@ function LiveRun() {
   const leadMarkersRef = useRef<google.maps.Marker[]>([]);
   const scopeDataRef = useRef<google.maps.Data | null>(null);
   const boundaryRequestIdRef = useRef(0);
+  const [categories, setCategories] = useState<LeadCategory[]>([]);
+  const categoriesRef = useRef<LeadCategory[]>([]);
 
-  const openDraft = useCallback((lat: number, lng: number, type: "lead" | "potential") => {
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const cats = await fetchCategories();
+      if (cancelled) return;
+      categoriesRef.current = cats;
+      setCategories(cats);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const openDraft = useCallback((lat: number, lng: number, type: string) => {
     setDraft({ lat, lng, type });
     setSheetOpen(true);
   }, []);
@@ -205,11 +221,12 @@ function LiveRun() {
       const lat = Number(l.lat);
       const lng = Number(l.lng);
       const visible = inScope(scope, lat, lng);
+      const cat = categoriesRef.current.find((c) => c.key === l.type);
       const m = new g.maps.Marker({
         position: { lat, lng },
         map: visible ? map : null,
-        icon: pinFor(l.type as string, l.status as string),
-        title: l.name ?? (l.type === "potential" ? "Potential house" : "Lead"),
+        icon: pinFor(l.type as string, l.status as string, cat?.color),
+        title: l.name ?? (l.type === "potential" ? "Potential house" : cat?.label ?? "Lead"),
       });
       leadMarkersRef.current.push(m);
     }
@@ -490,20 +507,38 @@ function LiveRun() {
 
       {pendingPin && (
         <div className="absolute inset-x-0 bottom-40 z-20 flex justify-center px-4">
-          <div className="pointer-events-auto flex w-full max-w-sm items-center gap-2 rounded-2xl border border-border bg-background/95 p-2 shadow-lg backdrop-blur">
-            <div className="flex flex-1 items-center gap-2 pl-2 text-xs text-muted-foreground">
-              <MapPin className="h-4 w-4 text-primary" />
-              Drag the pin to place it
+          <div className="pointer-events-auto w-full max-w-sm rounded-2xl border border-border bg-background/95 p-2 shadow-lg backdrop-blur">
+            <div className="flex items-center gap-2">
+              <div className="flex flex-1 items-center gap-2 pl-2 text-xs text-muted-foreground">
+                <MapPin className="h-4 w-4 text-primary" />
+                Drag the pin to place it
+              </div>
+              <Button size="sm" variant="ghost" onClick={clearPin} aria-label="Cancel pin">
+                <X className="h-4 w-4" />
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => { if (pendingPin) { openDraft(pendingPin.lat, pendingPin.lng, "potential"); clearPin(); } }}>
+                Potential
+              </Button>
+              <Button size="sm" onClick={() => { if (pendingPin) { openDraft(pendingPin.lat, pendingPin.lng, "lead"); clearPin(); } }}>
+                Lead
+              </Button>
             </div>
-            <Button size="sm" variant="ghost" onClick={clearPin} aria-label="Cancel pin">
-              <X className="h-4 w-4" />
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => { if (pendingPin) { openDraft(pendingPin.lat, pendingPin.lng, "potential"); clearPin(); } }}>
-              Potential
-            </Button>
-            <Button size="sm" onClick={() => { if (pendingPin) { openDraft(pendingPin.lat, pendingPin.lng, "lead"); clearPin(); } }}>
-              Lead
-            </Button>
+            {categories.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5 px-1">
+                {categories.map((c) => (
+                  <Button
+                    key={c.id}
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => { if (pendingPin) { openDraft(pendingPin.lat, pendingPin.lng, c.key); clearPin(); } }}
+                  >
+                    <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full" style={{ background: c.color }} />
+                    {c.label}
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -520,10 +555,12 @@ function LiveRun() {
   );
 }
 
-function pinFor(type: string, status: string): google.maps.Symbol {
+function pinFor(type: string, status: string, catColor?: string): google.maps.Symbol {
   const fill =
     type === "potential"
       ? "#9ca3af"
+      : catColor && type !== "lead"
+      ? catColor
       : status === "converted"
       ? "#16a34a"
       : status === "follow_up"
