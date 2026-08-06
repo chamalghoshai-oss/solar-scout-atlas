@@ -727,6 +727,79 @@ function AtlasPage() {
               <Toggle id="s-ni" checked={statusFilter.not_interested} onChange={(v) => setStatusFilter((s) => ({ ...s, not_interested: v }))} label="Not interested" dot="#6b7280" />
               <Toggle id="s-other" checked={statusFilter.other} onChange={(v) => setStatusFilter((s) => ({ ...s, other: v }))} label="Potential houses" dot="#3b82f6" />
             </div>
+
+            <div className="mt-3 mb-1 flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">My categories</span>
+              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setShowAddCat((v) => !v)}>
+                <Plus className="mr-1 h-3.5 w-3.5" /> New
+              </Button>
+            </div>
+            {categories.length > 0 && (
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                {categories.map((c) => (
+                  <div key={c.id} className="flex items-center gap-1">
+                    <div className="flex-1">
+                      <Toggle
+                        id={`c-${c.key}`}
+                        checked={catFilter[c.key] ?? true}
+                        onChange={(v) => setCatFilter((f) => ({ ...f, [c.key]: v }))}
+                        label={c.label}
+                        dot={c.color}
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeCategory(c)}
+                      aria-label={`Delete ${c.label}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {showAddCat && (
+              <div className="mt-2 rounded-lg border border-border p-2">
+                <Input
+                  className="h-8"
+                  placeholder="Category name (e.g. Shop, Follow-up)"
+                  value={newCatLabel}
+                  maxLength={32}
+                  onChange={(e) => setNewCatLabel(e.target.value)}
+                />
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {CATEGORY_COLOR_CHOICES.map((col) => (
+                    <button
+                      key={col}
+                      type="button"
+                      aria-label={`Colour ${col}`}
+                      onClick={() => setNewCatColor(col)}
+                      className={`h-6 w-6 rounded-full border-2 ${newCatColor === col ? "border-foreground" : "border-transparent"}`}
+                      style={{ background: col }}
+                    />
+                  ))}
+                  <input
+                    type="color"
+                    aria-label="Custom colour"
+                    value={newCatColor}
+                    onChange={(e) => setNewCatColor(e.target.value)}
+                    className="h-6 w-8 cursor-pointer rounded border border-border bg-transparent p-0"
+                  />
+                </div>
+                <Button size="sm" className="mt-2 w-full" onClick={addCategory} disabled={addingCat || !newCatLabel.trim()}>
+                  {addingCat ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1 h-3.5 w-3.5" />}
+                  Add category
+                </Button>
+              </div>
+            )}
+            {categories.length === 0 && !showAddCat && (
+              <p className="text-[10px] text-muted-foreground">
+                Create your own pin types (e.g. Shop, Society, Follow-up) with any colour.
+              </p>
+            )}
+
             <div className="mt-3 flex gap-2">
               <Button size="sm" variant="secondary" className="flex-1" onClick={enterBuildMode}>
                 <PenLine className="mr-1 h-3.5 w-3.5" /> Build route
