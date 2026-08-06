@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { uploadSimFile } from "@/lib/sim-uploads";
 import { activeProvider } from "@/lib/photogrammetry";
 
-export const Route = createFileRoute("/simulator")({
+export const Route = createFileRoute("/simulator/")({
   head: () => ({
     meta: [
       { title: "3D Solar Simulator — VertX Field" },

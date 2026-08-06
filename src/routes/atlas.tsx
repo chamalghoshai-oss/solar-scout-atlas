@@ -5,16 +5,24 @@ import { AppShell } from "@/components/AppShell";
 import { loadMaps, loadDrawing, cellKey } from "@/lib/gmaps";
 import { supabase } from "@/integrations/supabase/client";
 import { getDeviceId } from "@/lib/device";
-import { Loader2, Layers, ChevronDown, ChevronUp, PenLine, Trash2, Check, X } from "lucide-react";
+import { Loader2, Layers, ChevronDown, ChevronUp, PenLine, Trash2, Check, X, Plus } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { computeRoute } from "@/lib/route.functions";
 import { ScopeSelector } from "@/components/ScopeSelector";
 import { DEFAULT_SCOPE_ID, SCOPES, getScope, inScope, scopeToLatLngBounds } from "@/lib/scopes";
 import { loadBoundaryGeoJSON } from "@/lib/boundaries";
+import {
+  CATEGORY_COLOR_CHOICES,
+  createCategory,
+  deleteCategory,
+  fetchCategories,
+  type LeadCategory,
+} from "@/lib/lead-categories";
 
 export const Route = createFileRoute("/atlas")({
   validateSearch: (s) => z.object({ userId: z.string().uuid().optional() }).parse(s),
@@ -39,7 +47,16 @@ function AtlasPage() {
     heatMarkers: google.maps.Marker[];
     leadMarkers: { marker: google.maps.Marker; status: string; type: string }[];
     potentialMarkers: google.maps.Marker[];
-  }>({ runLines: [], heatMarkers: [], leadMarkers: [], potentialMarkers: [] });
+    customMarkers: { marker: google.maps.Marker; type: string }[];
+  }>({ runLines: [], heatMarkers: [], leadMarkers: [], potentialMarkers: [], customMarkers: [] });
+
+  const [categories, setCategories] = useState<LeadCategory[]>([]);
+  const categoriesRef = useRef<LeadCategory[]>([]);
+  const [catFilter, setCatFilter] = useState<Record<string, boolean>>({});
+  const [newCatLabel, setNewCatLabel] = useState("");
+  const [newCatColor, setNewCatColor] = useState(CATEGORY_COLOR_CHOICES[0]);
+  const [addingCat, setAddingCat] = useState(false);
+  const [showAddCat, setShowAddCat] = useState(false);
 
   // Manual route builder state
   const buildLineRef = useRef<google.maps.Polyline | null>(null);
@@ -87,6 +104,11 @@ function AtlasPage() {
     (async () => {
       const { g } = await loadMaps();
       if (cancelled || !mapEl.current) return;
+      const cats = await fetchCategories();
+      if (cancelled) return;
+      categoriesRef.current = cats;
+      setCategories(cats);
+      setCatFilter(Object.fromEntries(cats.map((c) => [c.key, true])));
       const map = new g.maps.Map(mapEl.current, {
         center: { lat: 11.2588, lng: 75.7804 },
         zoom: 13,
@@ -112,10 +134,12 @@ function AtlasPage() {
     layersRef.current.heatMarkers.forEach((m) => m.setMap(null));
     layersRef.current.leadMarkers.forEach(({ marker }) => marker.setMap(null));
     layersRef.current.potentialMarkers.forEach((m) => m.setMap(null));
+    layersRef.current.customMarkers.forEach(({ marker }) => marker.setMap(null));
     layersRef.current.runLines = [];
     layersRef.current.heatMarkers = [];
     layersRef.current.leadMarkers = [];
     layersRef.current.potentialMarkers = [];
+    layersRef.current.customMarkers = [];
   }
 
   async function draw(map: google.maps.Map) {
@@ -209,11 +233,13 @@ function AtlasPage() {
     // lead pins
     for (const l of leads) {
       const isPot = l.type === "potential";
+      const isCustom = !isPot && l.type !== "lead";
+      const cat = isCustom ? categoriesRef.current.find((c) => c.key === l.type) : undefined;
       const m = new g.maps.Marker({
         position: { lat: Number(l.lat), lng: Number(l.lng) },
         map,
-        title: l.name ?? (isPot ? "Potential house" : "Lead"),
-        icon: pinFor(l.type as string, l.status as string, l.name ?? null),
+        title: l.name ?? (isPot ? "Potential house" : cat?.label ?? "Lead"),
+        icon: pinFor(l.type as string, l.status as string, l.name ?? null, cat?.color),
         label: undefined,
         zIndex: 200,
       });
@@ -224,6 +250,8 @@ function AtlasPage() {
       }
       if (isPot) {
         layersRef.current.potentialMarkers.push(m);
+      } else if (isCustom) {
+        layersRef.current.customMarkers.push({ marker: m, type: String(l.type) });
       } else {
         layersRef.current.leadMarkers.push({ marker: m, status: String(l.status), type: String(l.type) });
       }
@@ -547,7 +575,46 @@ function AtlasPage() {
       const ok = !!p && inScope(scope, p.lat(), p.lng());
       m.setMap(showPotential && ok ? map : null);
     });
-  }, [showRuns, showHeat, showLeads, showPotential, statusFilter, scope]);
+    layersRef.current.customMarkers.forEach(({ marker, type }) => {
+      const p = marker.getPosition();
+      const ok = !!p && inScope(scope, p.lat(), p.lng());
+      marker.setMap(ok && (catFilter[type] ?? true) ? map : null);
+    });
+  }, [showRuns, showHeat, showLeads, showPotential, statusFilter, catFilter, scope, categories]);
+
+  async function addCategory() {
+    if (!newCatLabel.trim()) return;
+    setAddingCat(true);
+    try {
+      const cat = await createCategory(newCatLabel, newCatColor);
+      const next = [...categoriesRef.current, cat];
+      categoriesRef.current = next;
+      setCategories(next);
+      setCatFilter((f) => ({ ...f, [cat.key]: true }));
+      setNewCatLabel("");
+      setShowAddCat(false);
+      toast.success(`Category "${cat.label}" added`);
+      await refresh();
+    } catch (e) {
+      toast.error("Could not add category", { description: (e as Error).message });
+    } finally {
+      setAddingCat(false);
+    }
+  }
+
+  async function removeCategory(cat: LeadCategory) {
+    if (!confirm(`Delete the "${cat.label}" category? Existing pins stay but lose their colour.`)) return;
+    try {
+      await deleteCategory(cat.id);
+      const next = categoriesRef.current.filter((c) => c.id !== cat.id);
+      categoriesRef.current = next;
+      setCategories(next);
+      toast.success("Category deleted");
+      await refresh();
+    } catch (e) {
+      toast.error("Could not delete category", { description: (e as Error).message });
+    }
+  }
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -660,6 +727,79 @@ function AtlasPage() {
               <Toggle id="s-ni" checked={statusFilter.not_interested} onChange={(v) => setStatusFilter((s) => ({ ...s, not_interested: v }))} label="Not interested" dot="#6b7280" />
               <Toggle id="s-other" checked={statusFilter.other} onChange={(v) => setStatusFilter((s) => ({ ...s, other: v }))} label="Potential houses" dot="#3b82f6" />
             </div>
+
+            <div className="mt-3 mb-1 flex items-center justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">My categories</span>
+              <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setShowAddCat((v) => !v)}>
+                <Plus className="mr-1 h-3.5 w-3.5" /> New
+              </Button>
+            </div>
+            {categories.length > 0 && (
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                {categories.map((c) => (
+                  <div key={c.id} className="flex items-center gap-1">
+                    <div className="flex-1">
+                      <Toggle
+                        id={`c-${c.key}`}
+                        checked={catFilter[c.key] ?? true}
+                        onChange={(v) => setCatFilter((f) => ({ ...f, [c.key]: v }))}
+                        label={c.label}
+                        dot={c.color}
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeCategory(c)}
+                      aria-label={`Delete ${c.label}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {showAddCat && (
+              <div className="mt-2 rounded-lg border border-border p-2">
+                <Input
+                  className="h-8"
+                  placeholder="Category name (e.g. Shop, Follow-up)"
+                  value={newCatLabel}
+                  maxLength={32}
+                  onChange={(e) => setNewCatLabel(e.target.value)}
+                />
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {CATEGORY_COLOR_CHOICES.map((col) => (
+                    <button
+                      key={col}
+                      type="button"
+                      aria-label={`Colour ${col}`}
+                      onClick={() => setNewCatColor(col)}
+                      className={`h-6 w-6 rounded-full border-2 ${newCatColor === col ? "border-foreground" : "border-transparent"}`}
+                      style={{ background: col }}
+                    />
+                  ))}
+                  <input
+                    type="color"
+                    aria-label="Custom colour"
+                    value={newCatColor}
+                    onChange={(e) => setNewCatColor(e.target.value)}
+                    className="h-6 w-8 cursor-pointer rounded border border-border bg-transparent p-0"
+                  />
+                </div>
+                <Button size="sm" className="mt-2 w-full" onClick={addCategory} disabled={addingCat || !newCatLabel.trim()}>
+                  {addingCat ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1 h-3.5 w-3.5" />}
+                  Add category
+                </Button>
+              </div>
+            )}
+            {categories.length === 0 && !showAddCat && (
+              <p className="text-[10px] text-muted-foreground">
+                Create your own pin types (e.g. Shop, Society, Follow-up) with any colour.
+              </p>
+            )}
+
             <div className="mt-3 flex gap-2">
               <Button size="sm" variant="secondary" className="flex-1" onClick={enterBuildMode}>
                 <PenLine className="mr-1 h-3.5 w-3.5" /> Build route
@@ -779,9 +919,9 @@ function statusColor(key: ReturnType<typeof statusKey>): string {
     : "#9ca3af";
 }
 
-function pinFor(type: string, status: string, name: string | null): google.maps.Icon {
+function pinFor(type: string, status: string, name: string | null, catColor?: string): google.maps.Icon {
   const key = type === "potential" ? "other" : statusKey(status);
-  const fill = type === "potential" ? "#3b82f6" : statusColor(key);
+  const fill = type === "potential" ? "#3b82f6" : catColor ?? statusColor(key);
   const isSquare = key === "reference";
   const label = (name ?? "").trim();
   const shape = isSquare

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2, Boxes, Trash2, RefreshCcw } from "lucide-react";
 import { signSimUrls, isVideo } from "@/lib/sim-uploads";
 import { activeProvider } from "@/lib/photogrammetry";
-import { SimViewer } from "@/components/SimViewer";
+import { ShadeStudio } from "@/components/ShadeStudio";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/simulator/$id")({
@@ -115,9 +115,10 @@ function SimulatorDetail() {
       </div>
 
       <div className="mb-4">
-        <SimViewer kwEstimate={job.kw_estimate} />
-        <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-          Placeholder mesh. When a real photogrammetry provider is wired, the reconstructed model loads here.
+        <ShadeStudio kwEstimate={job.kw_estimate} />
+        <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
+          Enter the roof dimensions and any nearby obstruction, then scrub time of day (6 am–6 pm) and day of year to
+          watch the shade move across the array.
         </p>
       </div>
 
