@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Undo2, X, Check } from "lucide-react";
 import type { Pt } from "@/lib/cad-model";
 
-export type DrawMode = "outline" | "ridge";
+export type DrawMode = "outline" | "ridge" | "storey";
 
 /** Normalised (0–1) point on the site image. */
 type NPt = { u: number; v: number };
@@ -89,7 +89,7 @@ export function FootprintCanvas({
           <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,hsl(var(--border))_1px,transparent_1px),linear-gradient(hsl(var(--border))_1px,transparent_1px)] bg-[length:24px_24px] opacity-60" />
         )}
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 h-full w-full">
-          {ghost && mode === "ridge" && (
+          {ghost && mode !== "outline" && (
             <polygon points={ghost} fill="rgba(56,189,248,0.15)" stroke="#38bdf8" strokeWidth={0.4} vectorEffect="non-scaling-stroke" />
           )}
           {pts.length > 1 &&
@@ -105,7 +105,9 @@ export function FootprintCanvas({
         <div className="pointer-events-none absolute left-2 top-2 rounded bg-background/85 px-2 py-1 text-[11px] font-medium">
           {mode === "ridge"
             ? `Click the ridge start and end (${pts.length}/2)`
-            : `Click roof corners · double-click or Enter to close (${pts.length})`}
+            : mode === "storey"
+              ? `Click corners of the extra building / upper storey · double-click or Enter to close (${pts.length})`
+              : `Click roof corners · double-click or Enter to close (${pts.length})`}
         </div>
       </div>
       <div className="flex gap-2">
