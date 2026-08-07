@@ -593,7 +593,6 @@ export function CadScene({
   onMoveGroup: (id: string, x: number, z: number) => void;
 }) {
   const [dragging, setDragging] = useState(false);
-  const brick = useMemo(() => brickTexture(), []);
   const heat = useMemo(
     () => (heatOn ? heatTexture(roofGrid, gridSize.cols, gridSize.rows) : null),
     [heatOn, roofGrid, gridSize.cols, gridSize.rows],
@@ -603,6 +602,7 @@ export function CadScene({
     () => (model.footprint.length >= 3 ? polyBounds(model.footprint) : { minX: -6, maxX: 6, minZ: -5, maxZ: 5 }),
     [model.footprint],
   );
+  const brick = useMemo(() => brickTexture(b.maxX - b.minX, b.maxZ - b.minZ), [b]);
   const span = Math.max(b.maxX - b.minX, b.maxZ - b.minZ, 8) + 10;
   const top = model.roofType === "flat" ? model.wallHeight + model.parapetHeight : model.ridge.height;
   const dayLight = altitude > 0;
@@ -650,6 +650,10 @@ export function CadScene({
           <Ground span={span} />
           <Building model={model} heat={heat} brick={brick} />
 
+          {model.storeys.map((s) => (
+            <StoreyMesh key={s.id} model={model} storey={s} />
+          ))}
+
           {model.prims.map((p) => (
             <PrimMesh
               key={p.id}
@@ -678,8 +682,9 @@ export function CadScene({
             if (!e || !e.panels.length) return null;
             const surf = roofSurfaceAt(model, { x: g.x, z: g.z });
             return (
+              <group key={g.id}>
+              <Racking model={model} group={g} />
               <PanelGroupMesh
-                key={g.id}
                 panels={e.panels}
                 access={e.access}
                 heatOn={heatOn}
@@ -690,6 +695,7 @@ export function CadScene({
                 onMove={(x, z) => onMoveGroup(g.id, x, z)}
                 setDragging={setDragging}
               />
+              </group>
             );
           })}
 
