@@ -461,6 +461,31 @@ export function buildCasters(m: CadModel): Caster[] {
   }
   for (const p of m.prims) {
     const base = primBaseY(m, p);
+
+  }
+  for (const s of m.storeys) {
+    if (s.footprint.length < 3) continue;
+    const base = storeyBaseY(m, s);
+    const top = base + s.wallHeight + Math.max(0, s.parapetHeight);
+    for (let i = 0; i < s.footprint.length; i++) {
+      const p1 = s.footprint[i];
+      const p2 = s.footprint[(i + 1) % s.footprint.length];
+      const len = Math.hypot(p2.x - p1.x, p2.z - p1.z);
+      if (len < 0.05) continue;
+      out.push({
+        kind: "obb",
+        cx: (p1.x + p2.x) / 2,
+        cz: (p1.z + p2.z) / 2,
+        w: 0.2,
+        d: len,
+        minY: base,
+        maxY: top,
+        rotY: (Math.atan2(p2.x - p1.x, p2.z - p1.z) * 180) / Math.PI,
+      });
+    }
+  }
+  for (const p of m.prims) {
+    const base = primBaseY(m, p);
     if (p.kind === "block") {
       out.push({ kind: "obb", cx: p.x, cz: p.z, w: p.w, d: p.d, minY: base, maxY: base + p.h, rotY: p.rotY });
     } else {
