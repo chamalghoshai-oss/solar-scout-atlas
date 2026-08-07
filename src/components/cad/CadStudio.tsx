@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { Box, Cylinder, Grid3X3, Loader2, Pause, Pencil, Play, Sun, Trees, Trash2 } from "lucide-react";
+import { Box, Building2, Cylinder, Grid3X3, Loader2, Pause, Pencil, Play, Sun, Trees, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { dateFromDayHour, sunPosition, sunVector, MONTH_LABELS } from "@/lib/sun";
 import {
@@ -51,6 +51,7 @@ export function CadStudio({
   const [outlineN, setOutlineN] = useState<NPt[]>([]);
   const [selection, setSelection] = useState<Selection>(null);
   const [heatOn, setHeatOn] = useState(true);
+  const [selStorey, setSelStorey] = useState<string | null>(null);
 
   const [dayOfYear, setDayOfYear] = useState(() => {
     const now = new Date();
@@ -113,6 +114,22 @@ export function CadStudio({
         },
       }));
       toast.success(`Footprint set · ${polyArea(centred).toFixed(1)} m²`);
+    } else if (draw === "storey") {
+      const oc = centroid(
+        outlineN.map((p) => ({
+          x: (p.u - 0.5) * siteWidthM,
+          z: (p.v - 0.5) * (siteWidthM / aspect),
+        })),
+      );
+      const s = {
+        id: uid("storey"),
+        footprint: metres.map((p) => ({ x: p.x - oc.x, z: p.z - oc.z })),
+        wallHeight: 3,
+        parapetHeight: 0.6,
+      };
+      setModel((m) => ({ ...m, storeys: [...m.storeys, s] }));
+      setSelStorey(s.id);
+      toast.success("Building block added");
     } else if (draw === "ridge" && metres.length === 2) {
       // ridge points come in the same image frame; re-centre with the outline
       const oc = centroid(
