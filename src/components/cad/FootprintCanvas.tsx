@@ -80,7 +80,7 @@ export function FootprintCanvas({
         ref={ref}
         onClick={addPoint}
         onDoubleClick={finish}
-        className="relative w-full cursor-crosshair select-none overflow-hidden rounded-lg border border-border bg-muted"
+        className="relative mx-auto w-full max-w-[560px] cursor-crosshair select-none overflow-hidden rounded-lg border border-border bg-muted"
         style={{ aspectRatio: String(aspect) }}
       >
         {imageUrl ? (
