@@ -4,13 +4,20 @@ import { Suspense, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import {
   buildRoofFaces,
+  FOOTING_M,
+  MOUNT_CLEARANCE,
+  PANEL_TILT_DEG,
   polyBounds,
   primBaseY,
+  rafterCount,
   roofSurfaceAt,
   shadeRamp,
+  storeyBaseY,
   type CadModel,
+  type PanelGroup,
   type PlacedPanel,
   type Prim,
+  type Storey,
   type Tree,
   type Vec3,
 } from "@/lib/cad-model";
@@ -19,7 +26,11 @@ export type Selection = { kind: "prim" | "tree" | "group"; id: string } | null;
 
 /* ---------------- textures ---------------- */
 
-function brickTexture(): THREE.Texture | null {
+/** Roof tile checks sized to 1 ft x 0.75 ft. */
+const TILE_W = 0.3048;
+const TILE_H = 0.2286;
+
+function brickTexture(dx: number, dz: number): THREE.Texture | null {
   if (typeof document === "undefined") return null;
   const c = document.createElement("canvas");
   c.width = 128;
@@ -46,7 +57,9 @@ function brickTexture(): THREE.Texture | null {
   }
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(2, 2);
+  // canvas holds 4 x 4 checks; scale so each check is TILE_W x TILE_H metres
+  t.repeat.set(Math.max(1, dx / (4 * TILE_W)), Math.max(1, dz / (4 * TILE_H)));
+  t.anisotropy = 4;
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
@@ -81,11 +94,15 @@ function heatTexture(grid: Float32Array | null, cols: number, rows: number): THR
 
 /* ---------------- geometry builders ---------------- */
 
-function footprintShape(m: CadModel) {
+function shapeFromPts(pts: { x: number; z: number }[]) {
   const s = new THREE.Shape();
-  m.footprint.forEach((p, i) => (i === 0 ? s.moveTo(p.x, -p.z) : s.lineTo(p.x, -p.z)));
+  pts.forEach((p, i) => (i === 0 ? s.moveTo(p.x, -p.z) : s.lineTo(p.x, -p.z)));
   s.closePath();
   return s;
+}
+
+function footprintShape(m: CadModel) {
+  return shapeFromPts(m.footprint);
 }
 
 function applyPlanarUV(geo: THREE.BufferGeometry, b: { minX: number; maxX: number; minZ: number; maxZ: number }) {
@@ -315,6 +332,109 @@ function PrimMesh({
   );
 }
 
+/** Extra building block (adjacent building or upper storey). */
+function StoreyMesh({ model, storey }: { model: CadModel; storey: Storey }) {
+  const base = storeyBaseY(model, storey);
+  const walls = useMemo(() => {
+    if (storey.footprint.length < 3) return null;
+    const g = new THREE.ExtrudeGeometry(shapeFromPts(storey.footprint), {
+      depth: storey.wallHeight,
+      bevelEnabled: false,
+    });
+    g.rotateX(-Math.PI / 2);
+    return g;
+  }, [storey.footprint, storey.wallHeight]);
+
+  const deck = useMemo(() => {
+    if (storey.footprint.length < 3) return null;
+    const g = new THREE.ShapeGeometry(shapeFromPts(storey.footprint));
+    g.rotateX(-Math.PI / 2);
+    g.translate(0, storey.wallHeight + 0.02, 0);
+    return g;
+  }, [storey.footprint, storey.wallHeight]);
+
+  const parapets = useMemo(() => {
+    if (storey.parapetHeight <= 0) return [];
+    const fp = storey.footprint;
+    const out: Array<{ x: number; z: number; len: number; rot: number }> = [];
+    for (let i = 0; i < fp.length; i++) {
+      const p1 = fp[i];
+      const p2 = fp[(i + 1) % fp.length];
+      const len = Math.hypot(p2.x - p1.x, p2.z - p1.z);
+      if (len < 0.05) continue;
+      out.push({
+        x: (p1.x + p2.x) / 2,
+        z: (p1.z + p2.z) / 2,
+        len,
+        rot: Math.atan2(p2.x - p1.x, p2.z - p1.z),
+      });
+    }
+    return out;
+  }, [storey.footprint, storey.parapetHeight]);
+
+  if (!walls) return null;
+  return (
+    <group position={[0, base, 0]}>
+      <mesh geometry={walls} castShadow receiveShadow>
+        <meshStandardMaterial color="#d7dadc" roughness={0.9} />
+      </mesh>
+      {deck && (
+        <mesh geometry={deck} receiveShadow castShadow>
+          <meshStandardMaterial color="#b9bcbe" roughness={0.95} side={THREE.DoubleSide} />
+        </mesh>
+      )}
+      {parapets.map((p, i) => (
+        <mesh
+          key={i}
+          position={[p.x, storey.wallHeight + storey.parapetHeight / 2, p.z]}
+          rotation={[0, p.rot, 0]}
+          castShadow
+          receiveShadow
+        >
+          <boxGeometry args={[model.parapetThickness, storey.parapetHeight, p.len]} />
+          <meshStandardMaterial color="#c8cbcd" roughness={0.95} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/** Tilted rafters + 1 sq ft concrete footings under a panel group. */
+function Racking({ model, group }: { model: CadModel; group: PanelGroup }) {
+  const spec = model.panel;
+  const tilt = (PANEL_TILT_DEG * Math.PI) / 180;
+  const extentX = group.cols * (spec.width + spec.gapX);
+  const extentZ = group.rows * (spec.length + spec.gapZ);
+  const kw = (group.cols * group.rows * spec.watt) / 1000;
+  const n = rafterCount(kw);
+  const surf = roofSurfaceAt(model, { x: group.x, z: group.z });
+  const baseY = surf ? surf.y : model.wallHeight;
+  const rise = extentZ * Math.tan(tilt);
+  const beamLen = extentZ / Math.cos(tilt);
+  const xs = Array.from({ length: n }, (_, i) =>
+    group.x + (n === 1 ? 0 : (i / (n - 1) - 0.5) * extentX),
+  );
+  const footY = baseY + FOOTING_M / 2;
+  return (
+    <group>
+      {xs.map((x, i) => (
+        <group key={i}>
+          <mesh position={[x, baseY + MOUNT_CLEARANCE + rise / 2, group.z]} rotation={[tilt, 0, 0]} castShadow>
+            <boxGeometry args={[0.06, 0.09, beamLen]} />
+            <meshStandardMaterial color="#8a9298" metalness={0.4} roughness={0.5} />
+          </mesh>
+          {[-1, 1].map((s) => (
+            <mesh key={s} position={[x, footY, group.z + (s * extentZ) / 2]} castShadow receiveShadow>
+              <boxGeometry args={[FOOTING_M, FOOTING_M, FOOTING_M]} />
+              <meshStandardMaterial color="#9aa0a4" roughness={1} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+    </group>
+  );
+}
+
 function TreeMesh({
   tree,
   selected,
@@ -399,12 +519,20 @@ function PanelGroupMesh({
     >
       {panels.map((p, i) => {
         const a = access[i] ?? 1;
-        const [r, g, b] = shadeRamp(a);
-        const color = selected ? "#f97316" : heatOn ? `rgb(${r},${g},${b})` : "#16324a";
+        const color = selected ? "#f97316" : panelBlue(heatOn ? a : 1);
         return <PanelMesh key={`${p.groupId}-${p.index}`} p={p} color={color} />;
       })}
     </group>
   );
+}
+
+/** Light blue in full sun, deep blue when shaded. */
+function panelBlue(access: number): string {
+  const t = Math.max(0, Math.min(1, access));
+  const dark = [10, 38, 92];
+  const light = [125, 196, 240];
+  const c = dark.map((d, i) => Math.round(d + (light[i] - d) * t));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
 
 function SunMarker({ vec }: { vec: Vec3 }) {
@@ -464,7 +592,6 @@ export function CadScene({
   onMoveGroup: (id: string, x: number, z: number) => void;
 }) {
   const [dragging, setDragging] = useState(false);
-  const brick = useMemo(() => brickTexture(), []);
   const heat = useMemo(
     () => (heatOn ? heatTexture(roofGrid, gridSize.cols, gridSize.rows) : null),
     [heatOn, roofGrid, gridSize.cols, gridSize.rows],
@@ -474,6 +601,7 @@ export function CadScene({
     () => (model.footprint.length >= 3 ? polyBounds(model.footprint) : { minX: -6, maxX: 6, minZ: -5, maxZ: 5 }),
     [model.footprint],
   );
+  const brick = useMemo(() => brickTexture(b.maxX - b.minX, b.maxZ - b.minZ), [b]);
   const span = Math.max(b.maxX - b.minX, b.maxZ - b.minZ, 8) + 10;
   const top = model.roofType === "flat" ? model.wallHeight + model.parapetHeight : model.ridge.height;
   const dayLight = altitude > 0;
@@ -521,6 +649,10 @@ export function CadScene({
           <Ground span={span} />
           <Building model={model} heat={heat} brick={brick} />
 
+          {model.storeys.map((s) => (
+            <StoreyMesh key={s.id} model={model} storey={s} />
+          ))}
+
           {model.prims.map((p) => (
             <PrimMesh
               key={p.id}
@@ -549,8 +681,9 @@ export function CadScene({
             if (!e || !e.panels.length) return null;
             const surf = roofSurfaceAt(model, { x: g.x, z: g.z });
             return (
+              <group key={g.id}>
+              <Racking model={model} group={g} />
               <PanelGroupMesh
-                key={g.id}
                 panels={e.panels}
                 access={e.access}
                 heatOn={heatOn}
@@ -561,6 +694,7 @@ export function CadScene({
                 onMove={(x, z) => onMoveGroup(g.id, x, z)}
                 setDragging={setDragging}
               />
+              </group>
             );
           })}
 

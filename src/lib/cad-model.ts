@@ -59,6 +59,20 @@ export type PanelGroup = {
   rotY: number; // degrees, 0 = rows run north-south
 };
 
+/** An additional building block. Sits on the main roof when it overlaps it,
+ *  otherwise on the ground — this is how 2-storey / adjacent buildings work. */
+export type Storey = {
+  id: string;
+  footprint: Pt[];
+  wallHeight: number;
+  parapetHeight: number;
+};
+
+/** Fixed panel tilt: always 11° facing south. */
+export const PANEL_TILT_DEG = 11;
+/** Concrete footing cube edge: 1 sq ft. */
+export const FOOTING_M = 0.3048;
+
 export type CadModel = {
   footprint: Pt[]; // metres, centred on footprint centroid
   roofType: RoofType;
@@ -70,6 +84,7 @@ export type CadModel = {
   trees: Tree[];
   groups: PanelGroup[];
   panel: PanelSpec;
+  storeys: Storey[];
 };
 
 export function emptyModel(): CadModel {
@@ -84,6 +99,7 @@ export function emptyModel(): CadModel {
     trees: [],
     groups: [],
     panel: { ...DEFAULT_PANEL_SPEC },
+    storeys: [],
   };
 }
 
@@ -192,15 +208,35 @@ function faceFromVerts(verts: Vec3[]): RoofFace | null {
   };
 }
 
+/** Base height a storey sits at: on the main flat roof when it overlaps, else ground. */
+export function storeyBaseY(m: CadModel, s: Storey): number {
+  if (s.footprint.length < 3) return 0;
+  const c = centroid(s.footprint);
+  if (m.roofType === "flat" && m.footprint.length >= 3 && pointInPoly(c, m.footprint)) {
+    return m.wallHeight;
+  }
+  return 0;
+}
+
+export function storeyTopY(m: CadModel, s: Storey): number {
+  return storeyBaseY(m, s) + s.wallHeight;
+}
+
 /** Roof faces for the current model. Flat = one horizontal face. */
 export function buildRoofFaces(m: CadModel): RoofFace[] {
   const fp = m.footprint;
-  if (fp.length < 3) return [];
+  const out: RoofFace[] = [];
+  for (const s of m.storeys) {
+    if (s.footprint.length < 3) continue;
+    const f = faceFromVerts(s.footprint.map((p) => [p.x, storeyTopY(m, s), p.z] as Vec3));
+    if (f) out.push(f);
+  }
+  if (fp.length < 3) return out;
   if (m.roofType === "flat") {
     const f = faceFromVerts(fp.map((p) => [p.x, m.wallHeight, p.z] as Vec3));
-    return f ? [f] : [];
+    if (f) out.push(f);
+    return out;
   }
-  const out: RoofFace[] = [];
   const { a, b, height } = m.ridge;
   for (let i = 0; i < fp.length; i++) {
     const p1 = fp[i];
@@ -232,20 +268,17 @@ export function roofSurfaceAt(
   p: Pt,
   faces?: RoofFace[],
 ): { y: number; normal: Vec3; tiltDeg: number; azimuthDeg: number } | null {
-  if (m.roofType === "flat") {
-    if (!pointInPoly(p, m.footprint)) return null;
-    return { y: m.wallHeight, normal: [0, 1, 0], tiltDeg: 0, azimuthDeg: 180 };
-  }
   const fs = faces ?? buildRoofFaces(m);
+  let best: { y: number; normal: Vec3; tiltDeg: number; azimuthDeg: number } | null = null;
   for (const f of fs) {
     if (!pointInPoly(p, f.poly)) continue;
     const [nx, ny, nz] = f.normal;
     if (Math.abs(ny) < 1e-6) continue;
     const v0 = f.verts[0];
     const y = v0[1] - (nx * (p.x - v0[0]) + nz * (p.z - v0[2])) / ny;
-    return { y, normal: f.normal, tiltDeg: f.tiltDeg, azimuthDeg: f.azimuthDeg };
+    if (!best || y > best.y) best = { y, normal: f.normal, tiltDeg: f.tiltDeg, azimuthDeg: f.azimuthDeg };
   }
-  return null;
+  return best;
 }
 
 /* ------------------------------------------------------------------ *
@@ -264,6 +297,8 @@ export type PlacedPanel = {
 };
 
 const PANEL_CLEARANCE = 0.06;
+/** clearance under the low edge of a tilted panel (rafter foot height) */
+export const MOUNT_CLEARANCE = 0.12;
 
 export function layoutGroup(m: CadModel, g: PanelGroup, faces?: RoofFace[]): PlacedPanel[] {
   const fs = faces ?? buildRoofFaces(m);
@@ -275,6 +310,8 @@ export function layoutGroup(m: CadModel, g: PanelGroup, faces?: RoofFace[]): Pla
   const pitchX = spec.width + spec.gapX;
   const pitchZ = spec.length + spec.gapZ;
   let index = 0;
+  const tilt = (PANEL_TILT_DEG * Math.PI) / 180;
+  const rise = (spec.length / 2) * Math.sin(tilt);
   for (let r = 0; r < g.rows; r++) {
     for (let c = 0; c < g.cols; c++) {
       const lx = (c - (g.cols - 1) / 2) * pitchX;
@@ -286,29 +323,23 @@ export function layoutGroup(m: CadModel, g: PanelGroup, faces?: RoofFace[]): Pla
         index++;
         continue;
       }
-      if (m.roofType === "flat") {
-        out.push({
-          groupId: g.id,
-          index,
-          pos: [x, surf.y + PANEL_CLEARANCE, z],
-          yaw,
-          tilt: 0,
-        });
-      } else {
-        // follow roof slope: yaw to the downslope azimuth, tilt = face tilt
-        const faceYaw = ((180 - surf.azimuthDeg) * Math.PI) / 180;
-        out.push({
-          groupId: g.id,
-          index,
-          pos: [x, surf.y + PANEL_CLEARANCE, z],
-          yaw: faceYaw,
-          tilt: (surf.tiltDeg * Math.PI) / 180,
-        });
-      }
+      // panels always sit at a fixed 11° tilt facing south, on racking
+      out.push({
+        groupId: g.id,
+        index,
+        pos: [x, surf.y + PANEL_CLEARANCE + MOUNT_CLEARANCE + rise, z],
+        yaw: 0,
+        tilt,
+      });
       index++;
     }
   }
   return out;
+}
+
+/** Rafter count for a system size: 3 kW → 4, 5 kW → 6 … (kW + 1, min 2). */
+export function rafterCount(kw: number): number {
+  return Math.max(2, Math.round(kw) + 1);
 }
 
 export function allPanels(m: CadModel, faces?: RoofFace[]): PlacedPanel[] {
@@ -428,6 +459,27 @@ export function buildCasters(m: CadModel): Caster[] {
       });
     }
   }
+  for (const s of m.storeys) {
+    if (s.footprint.length < 3) continue;
+    const base = storeyBaseY(m, s);
+    const top = base + s.wallHeight + Math.max(0, s.parapetHeight);
+    for (let i = 0; i < s.footprint.length; i++) {
+      const p1 = s.footprint[i];
+      const p2 = s.footprint[(i + 1) % s.footprint.length];
+      const len = Math.hypot(p2.x - p1.x, p2.z - p1.z);
+      if (len < 0.05) continue;
+      out.push({
+        kind: "obb",
+        cx: (p1.x + p2.x) / 2,
+        cz: (p1.z + p2.z) / 2,
+        w: 0.2,
+        d: len,
+        minY: base,
+        maxY: top,
+        rotY: (Math.atan2(p2.x - p1.x, p2.z - p1.z) * 180) / Math.PI,
+      });
+    }
+  }
   for (const p of m.prims) {
     const base = primBaseY(m, p);
     if (p.kind === "block") {
@@ -501,8 +553,9 @@ export function roofShadeGrid(
   cols: number,
   rows: number,
 ): { grid: Float32Array; bounds: ReturnType<typeof polyBounds> } | null {
-  if (m.footprint.length < 3) return null;
-  const bounds = polyBounds(m.footprint);
+  const all = [...m.footprint, ...m.storeys.flatMap((s) => s.footprint)];
+  if (all.length < 3) return null;
+  const bounds = polyBounds(all);
   const faces = buildRoofFaces(m);
   const grid = new Float32Array(cols * rows).fill(-1);
   for (let r = 0; r < rows; r++) {

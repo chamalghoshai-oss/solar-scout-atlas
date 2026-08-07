@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { Box, Cylinder, Grid3X3, Loader2, Pause, Pencil, Play, Sun, Trees, Trash2 } from "lucide-react";
+import { Box, Building2, Cylinder, Grid3X3, Loader2, Pause, Pencil, Play, Sun, Trees, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { dateFromDayHour, sunPosition, sunVector, MONTH_LABELS } from "@/lib/sun";
 import {
@@ -51,6 +51,7 @@ export function CadStudio({
   const [outlineN, setOutlineN] = useState<NPt[]>([]);
   const [selection, setSelection] = useState<Selection>(null);
   const [heatOn, setHeatOn] = useState(true);
+  const [selStorey, setSelStorey] = useState<string | null>(null);
 
   const [dayOfYear, setDayOfYear] = useState(() => {
     const now = new Date();
@@ -113,6 +114,22 @@ export function CadStudio({
         },
       }));
       toast.success(`Footprint set · ${polyArea(centred).toFixed(1)} m²`);
+    } else if (draw === "storey") {
+      const oc = centroid(
+        outlineN.map((p) => ({
+          x: (p.u - 0.5) * siteWidthM,
+          z: (p.v - 0.5) * (siteWidthM / aspect),
+        })),
+      );
+      const s = {
+        id: uid("storey"),
+        footprint: metres.map((p) => ({ x: p.x - oc.x, z: p.z - oc.z })),
+        wallHeight: 3,
+        parapetHeight: 0.6,
+      };
+      setModel((m) => ({ ...m, storeys: [...m.storeys, s] }));
+      setSelStorey(s.id);
+      toast.success("Building block added");
     } else if (draw === "ridge" && metres.length === 2) {
       // ridge points come in the same image frame; re-centre with the outline
       const oc = centroid(
@@ -192,7 +209,11 @@ export function CadStudio({
         <div className="rounded-xl border border-border bg-card p-3">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {draw === "outline" ? "Draw roof outline" : "Draw ridge line"}
+              {draw === "outline"
+                ? "Draw roof outline"
+                : draw === "storey"
+                  ? "Draw extra building / storey"
+                  : "Draw ridge line"}
             </span>
             <div className="flex items-center gap-1.5">
               <Label className="text-[11px] text-muted-foreground">Image width (m)</Label>
@@ -242,6 +263,43 @@ export function CadStudio({
         <SceneFallback />
       )}
 
+      {/* Sun controls — directly under the 3D view */}
+      <div className="rounded-xl border border-border bg-card p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-sm font-semibold">
+            <Sun className="h-4 w-4 text-primary" />
+            {formatHour(hour)} ·{" "}
+            {new Date(Date.UTC(year, 0, 1) + (dayOfYear - 1) * 86400000).toLocaleDateString(undefined, {
+              day: "numeric",
+              month: "short",
+              timeZone: "UTC",
+            })}
+          </div>
+          <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setPlaying((p) => !p)}>
+            {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+          </Button>
+        </div>
+        <Label className="text-[11px] text-muted-foreground">Time of day (6 am – 6 pm)</Label>
+        <Slider className="my-2" min={6} max={18} step={0.25} value={[hour]} onValueChange={([v]) => setHour(v)} />
+        <Label className="text-[11px] text-muted-foreground">Day of year</Label>
+        <Slider className="my-2" min={1} max={365} step={1} value={[dayOfYear]} onValueChange={([v]) => setDayOfYear(v)} />
+        <div className="flex flex-wrap gap-1">
+          {MONTH_LABELS.map((m, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setDayOfYear(MONTH_STARTS[i] + 14)}
+              className="rounded border border-border px-1.5 py-0.5 text-[10px] hover:bg-muted"
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Sun elevation {((pos.altitude * 180) / Math.PI).toFixed(1)}° · azimuth {((pos.azimuth * 180) / Math.PI).toFixed(0)}°
+        </p>
+      </div>
+
       {/* Live totals */}
       <div className="grid grid-cols-3 gap-2 text-center">
         <Stat label="Panels" value={String(panels.length)} />
@@ -266,11 +324,55 @@ export function CadStudio({
           <Tool icon={<Cylinder className="h-3.5 w-3.5" />} label="Cylinder" onClick={() => addPrim("cylinder")} />
           <Tool icon={<Trees className="h-3.5 w-3.5" />} label="Tree" onClick={addTree} />
           <Tool icon={<Grid3X3 className="h-3.5 w-3.5" />} label="Panel grid" onClick={addGroup} />
+          <Tool
+            icon={<Building2 className="h-3.5 w-3.5" />}
+            label="Add building / storey"
+            onClick={() => setDraw("storey")}
+          />
         </div>
         <p className="mt-2 text-[11px] text-muted-foreground">
           Tap an object in the 3D view to select it, then drag it to move. Everything you place casts real shadows.
+          Draw a building block over the main roof to stack a second storey, or beside it for an adjacent building.
         </p>
       </div>
+
+      {/* Extra buildings / storeys */}
+      {model.storeys.length > 0 && (
+        <div className="rounded-xl border border-border bg-card p-3">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Buildings & storeys
+          </div>
+          <div className="space-y-2">
+            {model.storeys.map((s, i) => (
+              <div key={s.id} className="rounded-md border border-border p-2">
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold">Block {i + 1} · {polyArea(s.footprint).toFixed(1)} m²</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7"
+                    onClick={() => setModel((m) => ({ ...m, storeys: m.storeys.filter((x) => x.id !== s.id) }))}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <NumField
+                    label="Wall height (m)"
+                    value={s.wallHeight}
+                    onChange={(v) => updStorey(setModel, s.id, { wallHeight: Math.max(0.5, v) })}
+                  />
+                  <NumField
+                    label="Parapet (m)"
+                    value={s.parapetHeight}
+                    onChange={(v) => updStorey(setModel, s.id, { parapetHeight: Math.max(0, v) })}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Roof form */}
       <div className="rounded-xl border border-border bg-card p-3">
@@ -343,13 +445,17 @@ export function CadStudio({
             <div className="grid grid-cols-2 gap-2">
               {selPrim.kind === "block" ? (
                 <>
-                  <NumField label="Width (m)" value={selPrim.w} onChange={(v) => updPrim(setModel, selPrim.id, { w: v })} />
-                  <NumField label="Depth (m)" value={selPrim.d} onChange={(v) => updPrim(setModel, selPrim.id, { d: v })} />
+                  <NumField label="Length (m)" value={selPrim.w} onChange={(v) => updPrim(setModel, selPrim.id, { w: Math.max(0.05, v) })} />
+                  <NumField label="Breadth (m)" value={selPrim.d} onChange={(v) => updPrim(setModel, selPrim.id, { d: Math.max(0.05, v) })} />
                 </>
               ) : (
-                <NumField label="Radius (m)" value={selPrim.r} onChange={(v) => updPrim(setModel, selPrim.id, { r: v })} />
+                <NumField
+                  label="Diameter (m)"
+                  value={Math.round(selPrim.r * 200) / 100}
+                  onChange={(v) => updPrim(setModel, selPrim.id, { r: Math.max(0.025, v / 2) })}
+                />
               )}
-              <NumField label="Height (m)" value={selPrim.h} onChange={(v) => updPrim(setModel, selPrim.id, { h: v })} />
+              <NumField label="Height (m)" value={selPrim.h} onChange={(v) => updPrim(setModel, selPrim.id, { h: Math.max(0.05, v) })} />
               <NumField label="Rotation (°)" value={selPrim.rotY} onChange={(v) => updPrim(setModel, selPrim.id, { rotY: v })} />
               <div className="col-span-2 flex items-center justify-between rounded-md border border-border px-2 py-1.5">
                 <Label className="text-[11px] text-muted-foreground">Sits on roof</Label>
@@ -379,51 +485,13 @@ export function CadStudio({
                 onChange={(v) => patch({ panel: { ...model.panel, watt: Math.max(50, v) } })}
               />
               <p className="col-span-2 text-[11px] text-muted-foreground">
-                {model.roofType === "flat"
-                  ? "Flat roof: panels lie flush at 0° tilt."
-                  : "Sloped roof: panel tilt follows the roof slope automatically."}
+                Panels are always mounted at 11° facing south on rafters, with 1 sq ft concrete footings — on both
+                flat and sloped roofs. Rafters scale with size (3 kW → 4, 5 kW → 6).
               </p>
             </div>
           )}
         </div>
       )}
-
-      {/* Sun controls */}
-      <div className="rounded-xl border border-border bg-card p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-sm font-semibold">
-            <Sun className="h-4 w-4 text-primary" />
-            {formatHour(hour)} ·{" "}
-            {new Date(Date.UTC(year, 0, 1) + (dayOfYear - 1) * 86400000).toLocaleDateString(undefined, {
-              day: "numeric",
-              month: "short",
-              timeZone: "UTC",
-            })}
-          </div>
-          <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setPlaying((p) => !p)}>
-            {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-          </Button>
-        </div>
-        <Label className="text-[11px] text-muted-foreground">Time of day (6 am – 6 pm)</Label>
-        <Slider className="my-2" min={6} max={18} step={0.25} value={[hour]} onValueChange={([v]) => setHour(v)} />
-        <Label className="text-[11px] text-muted-foreground">Day of year</Label>
-        <Slider className="my-2" min={1} max={365} step={1} value={[dayOfYear]} onValueChange={([v]) => setDayOfYear(v)} />
-        <div className="flex flex-wrap gap-1">
-          {MONTH_LABELS.map((m, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => setDayOfYear(MONTH_STARTS[i] + 14)}
-              className="rounded border border-border px-1.5 py-0.5 text-[10px] hover:bg-muted"
-            >
-              {m}
-            </button>
-          ))}
-        </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Sun elevation {((pos.altitude * 180) / Math.PI).toFixed(1)}° · azimuth {((pos.azimuth * 180) / Math.PI).toFixed(0)}°
-        </p>
-      </div>
 
       {/* Heatmap */}
       <div className="rounded-xl border border-border bg-card p-3">
@@ -460,6 +528,9 @@ function updTree(set: React.Dispatch<React.SetStateAction<CadModel>>, id: string
 }
 function updGroup(set: React.Dispatch<React.SetStateAction<CadModel>>, id: string, p: Record<string, unknown>) {
   set((m) => ({ ...m, groups: m.groups.map((x) => (x.id === id ? { ...x, ...p } : x)) }));
+}
+function updStorey(set: React.Dispatch<React.SetStateAction<CadModel>>, id: string, p: Record<string, unknown>) {
+  set((m) => ({ ...m, storeys: m.storeys.map((x) => (x.id === id ? { ...x, ...p } : x)) }));
 }
 
 function SceneFallback() {
