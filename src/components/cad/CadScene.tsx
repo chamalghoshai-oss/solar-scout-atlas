@@ -95,11 +95,15 @@ function heatTexture(grid: Float32Array | null, cols: number, rows: number): THR
 
 /* ---------------- geometry builders ---------------- */
 
-function footprintShape(m: CadModel) {
+function shapeFromPts(pts: { x: number; z: number }[]) {
   const s = new THREE.Shape();
-  m.footprint.forEach((p, i) => (i === 0 ? s.moveTo(p.x, -p.z) : s.lineTo(p.x, -p.z)));
+  pts.forEach((p, i) => (i === 0 ? s.moveTo(p.x, -p.z) : s.lineTo(p.x, -p.z)));
   s.closePath();
   return s;
+}
+
+function footprintShape(m: CadModel) {
+  return shapeFromPts(m.footprint);
 }
 
 function applyPlanarUV(geo: THREE.BufferGeometry, b: { minX: number; maxX: number; minZ: number; maxZ: number }) {
