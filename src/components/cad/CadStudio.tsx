@@ -324,11 +324,55 @@ export function CadStudio({
           <Tool icon={<Cylinder className="h-3.5 w-3.5" />} label="Cylinder" onClick={() => addPrim("cylinder")} />
           <Tool icon={<Trees className="h-3.5 w-3.5" />} label="Tree" onClick={addTree} />
           <Tool icon={<Grid3X3 className="h-3.5 w-3.5" />} label="Panel grid" onClick={addGroup} />
+          <Tool
+            icon={<Building2 className="h-3.5 w-3.5" />}
+            label="Add building / storey"
+            onClick={() => setDraw("storey")}
+          />
         </div>
         <p className="mt-2 text-[11px] text-muted-foreground">
           Tap an object in the 3D view to select it, then drag it to move. Everything you place casts real shadows.
+          Draw a building block over the main roof to stack a second storey, or beside it for an adjacent building.
         </p>
       </div>
+
+      {/* Extra buildings / storeys */}
+      {model.storeys.length > 0 && (
+        <div className="rounded-xl border border-border bg-card p-3">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Buildings & storeys
+          </div>
+          <div className="space-y-2">
+            {model.storeys.map((s, i) => (
+              <div key={s.id} className="rounded-md border border-border p-2">
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold">Block {i + 1} · {polyArea(s.footprint).toFixed(1)} m²</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7"
+                    onClick={() => setModel((m) => ({ ...m, storeys: m.storeys.filter((x) => x.id !== s.id) }))}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <NumField
+                    label="Wall height (m)"
+                    value={s.wallHeight}
+                    onChange={(v) => updStorey(setModel, s.id, { wallHeight: Math.max(0.5, v) })}
+                  />
+                  <NumField
+                    label="Parapet (m)"
+                    value={s.parapetHeight}
+                    onChange={(v) => updStorey(setModel, s.id, { parapetHeight: Math.max(0, v) })}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Roof form */}
       <div className="rounded-xl border border-border bg-card p-3">
