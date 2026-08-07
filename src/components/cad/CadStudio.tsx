@@ -210,6 +210,7 @@ export function CadStudio({
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {draw === "outline" ? "Draw roof outline" : "Draw ridge line"}
+            {draw === "storey" ? " " : ""}
             </span>
             <div className="flex items-center gap-1.5">
               <Label className="text-[11px] text-muted-foreground">Image width (m)</Label>
