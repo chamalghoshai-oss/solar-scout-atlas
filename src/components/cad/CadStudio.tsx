@@ -526,6 +526,9 @@ function updTree(set: React.Dispatch<React.SetStateAction<CadModel>>, id: string
 function updGroup(set: React.Dispatch<React.SetStateAction<CadModel>>, id: string, p: Record<string, unknown>) {
   set((m) => ({ ...m, groups: m.groups.map((x) => (x.id === id ? { ...x, ...p } : x)) }));
 }
+function updStorey(set: React.Dispatch<React.SetStateAction<CadModel>>, id: string, p: Record<string, unknown>) {
+  set((m) => ({ ...m, storeys: m.storeys.map((x) => (x.id === id ? { ...x, ...p } : x)) }));
+}
 
 function SceneFallback() {
   return (
