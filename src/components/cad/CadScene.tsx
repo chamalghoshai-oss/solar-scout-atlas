@@ -520,12 +520,20 @@ function PanelGroupMesh({
     >
       {panels.map((p, i) => {
         const a = access[i] ?? 1;
-        const [r, g, b] = shadeRamp(a);
-        const color = selected ? "#f97316" : heatOn ? `rgb(${r},${g},${b})` : "#16324a";
+        const color = selected ? "#f97316" : panelBlue(heatOn ? a : 1);
         return <PanelMesh key={`${p.groupId}-${p.index}`} p={p} color={color} />;
       })}
     </group>
   );
+}
+
+/** Light blue in full sun, deep blue when shaded. */
+function panelBlue(access: number): string {
+  const t = Math.max(0, Math.min(1, access));
+  const dark = [10, 38, 92];
+  const light = [125, 196, 240];
+  const c = dark.map((d, i) => Math.round(d + (light[i] - d) * t));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
 
 function SunMarker({ vec }: { vec: Vec3 }) {
