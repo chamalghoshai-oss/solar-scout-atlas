@@ -459,10 +459,6 @@ export function buildCasters(m: CadModel): Caster[] {
       });
     }
   }
-  for (const p of m.prims) {
-    const base = primBaseY(m, p);
-
-  }
   for (const s of m.storeys) {
     if (s.footprint.length < 3) continue;
     const base = storeyBaseY(m, s);
