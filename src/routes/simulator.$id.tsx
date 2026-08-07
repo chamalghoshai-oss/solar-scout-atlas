@@ -7,6 +7,8 @@ import { ArrowLeft, Loader2, Boxes, Trash2, RefreshCcw } from "lucide-react";
 import { signSimUrls, isVideo } from "@/lib/sim-uploads";
 import { activeProvider } from "@/lib/photogrammetry";
 import { ShadeStudio } from "@/components/ShadeStudio";
+import { CadStudio } from "@/components/cad/CadStudio";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/simulator/$id")({
@@ -115,11 +117,26 @@ function SimulatorDetail() {
       </div>
 
       <div className="mb-4">
-        <ShadeStudio kwEstimate={job.kw_estimate} />
-        <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
-          Enter the roof dimensions and any nearby obstruction, then scrub time of day (6 am–6 pm) and day of year to
-          watch the shade move across the array.
-        </p>
+        <Tabs defaultValue="cad">
+          <TabsList className="mb-3 grid w-full grid-cols-2">
+            <TabsTrigger value="cad">Manual 3D design</TabsTrigger>
+            <TabsTrigger value="quick">Quick estimate</TabsTrigger>
+          </TabsList>
+          <TabsContent value="cad">
+            <CadStudio imageUrl={firstImage} />
+            <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
+              Draw the roof outline over the site image, set the roof form, drop obstructions and panel grids, then
+              scrub the date and time sliders (6 am–6 pm) to watch real shadows move across the design.
+            </p>
+          </TabsContent>
+          <TabsContent value="quick">
+            <ShadeStudio kwEstimate={job.kw_estimate} />
+            <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
+              Enter the roof dimensions and any nearby obstruction, then scrub time of day (6 am–6 pm) and day of year
+              to watch the shade move across the array.
+            </p>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {job.notes && (
