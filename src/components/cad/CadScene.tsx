@@ -252,7 +252,7 @@ function Building({
           </mesh>
           {heat && (
             <mesh geometry={slopedGeo} position={[0, 0.04, 0]}>
-              <meshBasicMaterial map={heat} transparent opacity={0.75} side={THREE.DoubleSide} depthWrite={false} />
+              <meshBasicMaterial map={heat} transparent opacity={0.55} side={THREE.DoubleSide} depthWrite={false} />
             </mesh>
           )}
         </>
