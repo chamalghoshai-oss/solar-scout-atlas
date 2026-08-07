@@ -128,3 +128,105 @@ export function annualShade(lat: number, lng: number, obs: Obstruction, year = n
 }
 
 export const MONTH_LABELS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+
+// Axis-aligned box shading + roof irradiance grid (Arka-style heat map).
+// Scene axes: +x = east, +z = south, +y = up.
+
+export type Box = {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  minZ: number;
+  maxZ: number;
+};
+
+export function boxFrom(cx: number, cz: number, w: number, d: number, base: number, top: number): Box {
+  return { minX: cx - w / 2, maxX: cx + w / 2, minZ: cz - d / 2, maxZ: cz + d / 2, minY: base, maxY: top };
+}
+
+/** Slab-method ray/AABB test; true when the ray leaving `o` along `d` hits `b`. */
+export function rayHitsBox(o: [number, number, number], d: [number, number, number], b: Box): boolean {
+  let tmin = 0;
+  let tmax = 1e6;
+  const lo = [b.minX, b.minY, b.minZ];
+  const hi = [b.maxX, b.maxY, b.maxZ];
+  for (let i = 0; i < 3; i++) {
+    const di = d[i];
+    const oi = o[i];
+    if (Math.abs(di) < 1e-9) {
+      if (oi < lo[i] || oi > hi[i]) return false;
+      continue;
+    }
+    let t1 = (lo[i] - oi) / di;
+    let t2 = (hi[i] - oi) / di;
+    if (t1 > t2) {
+      const tmp = t1;
+      t1 = t2;
+      t2 = tmp;
+    }
+    tmin = Math.max(tmin, t1);
+    tmax = Math.min(tmax, t2);
+    if (tmin > tmax) return false;
+  }
+  return tmax > 0.02;
+}
+
+/** Unit vector pointing from the site toward the sun, in scene axes. */
+export function sunDir(pos: SunPos): [number, number, number] {
+  const cosAlt = Math.cos(pos.altitude);
+  return [cosAlt * Math.sin(pos.azimuth), Math.sin(pos.altitude), -cosAlt * Math.cos(pos.azimuth)];
+}
+
+export function pointShaded(pos: SunPos, boxes: Box[], p: [number, number, number]): boolean {
+  if (pos.altitude <= 0) return true;
+  const d = sunDir(pos);
+  for (const b of boxes) if (rayHitsBox(p, d, b)) return true;
+  return false;
+}
+
+/** Sun positions sampled across the year (15th of each month, every 30 min 6–18). */
+export function yearSunSamples(lat: number, lng: number, year = new Date().getFullYear()): SunPos[] {
+  const out: SunPos[] = [];
+  for (let m = 0; m < 12; m++) {
+    const dayOfYear = Math.round((Date.UTC(year, m, 15) - Date.UTC(year, 0, 1)) / DAY_MS) + 1;
+    for (let h = 6; h <= 18; h += 0.5) {
+      const p = sunPosition(dateFromDayHour(year, dayOfYear, h, lng), lat, lng);
+      if (p.altitude > 0) out.push(p);
+    }
+  }
+  return out;
+}
+
+/**
+ * Per-cell yearly sun access (0–1) across a rectangular roof plane, weighted by
+ * the sine of the sun altitude (irradiance proxy on a horizontal surface).
+ */
+export function roofIrradianceGrid(opts: {
+  samples: SunPos[];
+  boxes: Box[];
+  length: number;
+  width: number;
+  y: number;
+  cols: number;
+  rows: number;
+}): Float32Array {
+  const { samples, boxes, length, width, y, cols, rows } = opts;
+  const grid = new Float32Array(cols * rows);
+  let maxV = 1e-6;
+  for (let r = 0; r < rows; r++) {
+    const z = -width / 2 + ((r + 0.5) / rows) * width;
+    for (let c = 0; c < cols; c++) {
+      const x = -length / 2 + ((c + 0.5) / cols) * length;
+      let sum = 0;
+      for (const s of samples) {
+        if (pointShaded(s, boxes, [x, y, z])) continue;
+        sum += Math.sin(s.altitude);
+      }
+      grid[r * cols + c] = sum;
+      if (sum > maxV) maxV = sum;
+    }
+  }
+  for (let i = 0; i < grid.length; i++) grid[i] /= maxV;
+  return grid;
+}
