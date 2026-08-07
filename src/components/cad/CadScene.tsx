@@ -4,7 +4,6 @@ import { Suspense, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import {
   buildRoofFaces,
-  centroid,
   FOOTING_M,
   MOUNT_CLEARANCE,
   PANEL_TILT_DEG,
