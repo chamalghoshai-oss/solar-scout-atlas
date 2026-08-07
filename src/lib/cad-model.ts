@@ -297,6 +297,8 @@ export type PlacedPanel = {
 };
 
 const PANEL_CLEARANCE = 0.06;
+/** clearance under the low edge of a tilted panel (rafter foot height) */
+export const MOUNT_CLEARANCE = 0.12;
 
 export function layoutGroup(m: CadModel, g: PanelGroup, faces?: RoofFace[]): PlacedPanel[] {
   const fs = faces ?? buildRoofFaces(m);
@@ -308,6 +310,8 @@ export function layoutGroup(m: CadModel, g: PanelGroup, faces?: RoofFace[]): Pla
   const pitchX = spec.width + spec.gapX;
   const pitchZ = spec.length + spec.gapZ;
   let index = 0;
+  const tilt = (PANEL_TILT_DEG * Math.PI) / 180;
+  const rise = (spec.length / 2) * Math.sin(tilt);
   for (let r = 0; r < g.rows; r++) {
     for (let c = 0; c < g.cols; c++) {
       const lx = (c - (g.cols - 1) / 2) * pitchX;
@@ -319,29 +323,23 @@ export function layoutGroup(m: CadModel, g: PanelGroup, faces?: RoofFace[]): Pla
         index++;
         continue;
       }
-      if (m.roofType === "flat") {
-        out.push({
-          groupId: g.id,
-          index,
-          pos: [x, surf.y + PANEL_CLEARANCE, z],
-          yaw,
-          tilt: 0,
-        });
-      } else {
-        // follow roof slope: yaw to the downslope azimuth, tilt = face tilt
-        const faceYaw = ((180 - surf.azimuthDeg) * Math.PI) / 180;
-        out.push({
-          groupId: g.id,
-          index,
-          pos: [x, surf.y + PANEL_CLEARANCE, z],
-          yaw: faceYaw,
-          tilt: (surf.tiltDeg * Math.PI) / 180,
-        });
-      }
+      // panels always sit at a fixed 11° tilt facing south, on racking
+      out.push({
+        groupId: g.id,
+        index,
+        pos: [x, surf.y + PANEL_CLEARANCE + MOUNT_CLEARANCE + rise, z],
+        yaw: 0,
+        tilt,
+      });
       index++;
     }
   }
   return out;
+}
+
+/** Rafter count for a system size: 3 kW → 4, 5 kW → 6 … (kW + 1, min 2). */
+export function rafterCount(kw: number): number {
+  return Math.max(2, Math.round(kw) + 1);
 }
 
 export function allPanels(m: CadModel, faces?: RoofFace[]): PlacedPanel[] {
