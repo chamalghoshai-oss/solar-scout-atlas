@@ -553,8 +553,9 @@ export function roofShadeGrid(
   cols: number,
   rows: number,
 ): { grid: Float32Array; bounds: ReturnType<typeof polyBounds> } | null {
-  if (m.footprint.length < 3) return null;
-  const bounds = polyBounds(m.footprint);
+  const all = [...m.footprint, ...m.storeys.flatMap((s) => s.footprint)];
+  if (all.length < 3) return null;
+  const bounds = polyBounds(all);
   const faces = buildRoofFaces(m);
   const grid = new Float32Array(cols * rows).fill(-1);
   for (let r = 0; r < rows; r++) {
