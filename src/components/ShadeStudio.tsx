@@ -77,13 +77,36 @@ export function ShadeStudio({
             </div>
           }
         >
-          <ShadeScene dims={dims} obstruction={obs} sunVec={vec} altitude={pos.altitude} panelCount={panelCount} />
+          <ShadeScene
+            dims={dims}
+            obstruction={obs}
+            sunVec={vec}
+            altitude={pos.altitude}
+            panelCount={panelCount}
+            lat={lat}
+            lng={lng}
+          />
         </Suspense>
       ) : (
         <div className="flex h-[420px] items-center justify-center rounded-lg border border-border bg-muted/40">
           <Loader2 className="h-5 w-5 animate-spin text-primary" />
         </div>
       )}
+
+      {/* Irradiance legend */}
+      <div className="rounded-xl border border-border bg-card p-3">
+        <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Roof irradiance (yearly)
+        </div>
+        <div
+          className="h-2.5 w-full rounded-full"
+          style={{ background: "linear-gradient(90deg,#a8187a,#d6444a,#f08a20,#f6c82c,#96c837,#2ebe5a)" }}
+        />
+        <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+          <span>Shaded / low</span>
+          <span>Best sun</span>
+        </div>
+      </div>
 
       {/* Time controls */}
       <div className="rounded-xl border border-border bg-card p-3">
