@@ -208,15 +208,35 @@ function faceFromVerts(verts: Vec3[]): RoofFace | null {
   };
 }
 
+/** Base height a storey sits at: on the main flat roof when it overlaps, else ground. */
+export function storeyBaseY(m: CadModel, s: Storey): number {
+  if (s.footprint.length < 3) return 0;
+  const c = centroid(s.footprint);
+  if (m.roofType === "flat" && m.footprint.length >= 3 && pointInPoly(c, m.footprint)) {
+    return m.wallHeight;
+  }
+  return 0;
+}
+
+export function storeyTopY(m: CadModel, s: Storey): number {
+  return storeyBaseY(m, s) + s.wallHeight;
+}
+
 /** Roof faces for the current model. Flat = one horizontal face. */
 export function buildRoofFaces(m: CadModel): RoofFace[] {
   const fp = m.footprint;
-  if (fp.length < 3) return [];
+  const out: RoofFace[] = [];
+  for (const s of m.storeys) {
+    if (s.footprint.length < 3) continue;
+    const f = faceFromVerts(s.footprint.map((p) => [p.x, storeyTopY(m, s), p.z] as Vec3));
+    if (f) out.push(f);
+  }
+  if (fp.length < 3) return out;
   if (m.roofType === "flat") {
     const f = faceFromVerts(fp.map((p) => [p.x, m.wallHeight, p.z] as Vec3));
-    return f ? [f] : [];
+    if (f) out.push(f);
+    return out;
   }
-  const out: RoofFace[] = [];
   const { a, b, height } = m.ridge;
   for (let i = 0; i < fp.length; i++) {
     const p1 = fp[i];
@@ -248,20 +268,17 @@ export function roofSurfaceAt(
   p: Pt,
   faces?: RoofFace[],
 ): { y: number; normal: Vec3; tiltDeg: number; azimuthDeg: number } | null {
-  if (m.roofType === "flat") {
-    if (!pointInPoly(p, m.footprint)) return null;
-    return { y: m.wallHeight, normal: [0, 1, 0], tiltDeg: 0, azimuthDeg: 180 };
-  }
   const fs = faces ?? buildRoofFaces(m);
+  let best: { y: number; normal: Vec3; tiltDeg: number; azimuthDeg: number } | null = null;
   for (const f of fs) {
     if (!pointInPoly(p, f.poly)) continue;
     const [nx, ny, nz] = f.normal;
     if (Math.abs(ny) < 1e-6) continue;
     const v0 = f.verts[0];
     const y = v0[1] - (nx * (p.x - v0[0]) + nz * (p.z - v0[2])) / ny;
-    return { y, normal: f.normal, tiltDeg: f.tiltDeg, azimuthDeg: f.azimuthDeg };
+    if (!best || y > best.y) best = { y, normal: f.normal, tiltDeg: f.tiltDeg, azimuthDeg: f.azimuthDeg };
   }
-  return null;
+  return best;
 }
 
 /* ------------------------------------------------------------------ *
