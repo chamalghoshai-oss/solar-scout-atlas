@@ -38,6 +38,8 @@ function SimulatorDetail() {
   const [job, setJob] = useState<Job | null>(null);
   const [signed, setSigned] = useState<Record<string, string>>({});
   const [reprocessing, setReprocessing] = useState(false);
+  const firstImage =
+    job?.upload_paths.map((p) => signed[p]).find((u, i) => u && !isVideo(job.upload_paths[i])) ?? null;
 
   useEffect(() => {
     (async () => {
