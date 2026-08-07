@@ -59,6 +59,20 @@ export type PanelGroup = {
   rotY: number; // degrees, 0 = rows run north-south
 };
 
+/** An additional building block. Sits on the main roof when it overlaps it,
+ *  otherwise on the ground — this is how 2-storey / adjacent buildings work. */
+export type Storey = {
+  id: string;
+  footprint: Pt[];
+  wallHeight: number;
+  parapetHeight: number;
+};
+
+/** Fixed panel tilt: always 11° facing south. */
+export const PANEL_TILT_DEG = 11;
+/** Concrete footing cube edge: 1 sq ft. */
+export const FOOTING_M = 0.3048;
+
 export type CadModel = {
   footprint: Pt[]; // metres, centred on footprint centroid
   roofType: RoofType;
@@ -70,6 +84,7 @@ export type CadModel = {
   trees: Tree[];
   groups: PanelGroup[];
   panel: PanelSpec;
+  storeys: Storey[];
 };
 
 export function emptyModel(): CadModel {
@@ -84,6 +99,7 @@ export function emptyModel(): CadModel {
     trees: [],
     groups: [],
     panel: { ...DEFAULT_PANEL_SPEC },
+    storeys: [],
   };
 }
 
