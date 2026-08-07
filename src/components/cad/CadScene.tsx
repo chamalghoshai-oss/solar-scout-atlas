@@ -4,13 +4,21 @@ import { Suspense, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import {
   buildRoofFaces,
+  centroid,
+  FOOTING_M,
+  MOUNT_CLEARANCE,
+  PANEL_TILT_DEG,
   polyBounds,
   primBaseY,
+  rafterCount,
   roofSurfaceAt,
   shadeRamp,
+  storeyBaseY,
   type CadModel,
+  type PanelGroup,
   type PlacedPanel,
   type Prim,
+  type Storey,
   type Tree,
   type Vec3,
 } from "@/lib/cad-model";
@@ -19,7 +27,11 @@ export type Selection = { kind: "prim" | "tree" | "group"; id: string } | null;
 
 /* ---------------- textures ---------------- */
 
-function brickTexture(): THREE.Texture | null {
+/** Roof tile checks sized to 1 ft x 0.75 ft. */
+const TILE_W = 0.3048;
+const TILE_H = 0.2286;
+
+function brickTexture(dx: number, dz: number): THREE.Texture | null {
   if (typeof document === "undefined") return null;
   const c = document.createElement("canvas");
   c.width = 128;
@@ -46,7 +58,9 @@ function brickTexture(): THREE.Texture | null {
   }
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(2, 2);
+  // canvas holds 4 x 4 checks; scale so each check is TILE_W x TILE_H metres
+  t.repeat.set(Math.max(1, dx / (4 * TILE_W)), Math.max(1, dz / (4 * TILE_H)));
+  t.anisotropy = 4;
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
