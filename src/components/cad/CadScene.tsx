@@ -333,6 +333,109 @@ function PrimMesh({
   );
 }
 
+/** Extra building block (adjacent building or upper storey). */
+function StoreyMesh({ model, storey }: { model: CadModel; storey: Storey }) {
+  const base = storeyBaseY(model, storey);
+  const walls = useMemo(() => {
+    if (storey.footprint.length < 3) return null;
+    const g = new THREE.ExtrudeGeometry(shapeFromPts(storey.footprint), {
+      depth: storey.wallHeight,
+      bevelEnabled: false,
+    });
+    g.rotateX(-Math.PI / 2);
+    return g;
+  }, [storey.footprint, storey.wallHeight]);
+
+  const deck = useMemo(() => {
+    if (storey.footprint.length < 3) return null;
+    const g = new THREE.ShapeGeometry(shapeFromPts(storey.footprint));
+    g.rotateX(-Math.PI / 2);
+    g.translate(0, storey.wallHeight + 0.02, 0);
+    return g;
+  }, [storey.footprint, storey.wallHeight]);
+
+  const parapets = useMemo(() => {
+    if (storey.parapetHeight <= 0) return [];
+    const fp = storey.footprint;
+    const out: Array<{ x: number; z: number; len: number; rot: number }> = [];
+    for (let i = 0; i < fp.length; i++) {
+      const p1 = fp[i];
+      const p2 = fp[(i + 1) % fp.length];
+      const len = Math.hypot(p2.x - p1.x, p2.z - p1.z);
+      if (len < 0.05) continue;
+      out.push({
+        x: (p1.x + p2.x) / 2,
+        z: (p1.z + p2.z) / 2,
+        len,
+        rot: Math.atan2(p2.x - p1.x, p2.z - p1.z),
+      });
+    }
+    return out;
+  }, [storey.footprint, storey.parapetHeight]);
+
+  if (!walls) return null;
+  return (
+    <group position={[0, base, 0]}>
+      <mesh geometry={walls} castShadow receiveShadow>
+        <meshStandardMaterial color="#d7dadc" roughness={0.9} />
+      </mesh>
+      {deck && (
+        <mesh geometry={deck} receiveShadow castShadow>
+          <meshStandardMaterial color="#b9bcbe" roughness={0.95} side={THREE.DoubleSide} />
+        </mesh>
+      )}
+      {parapets.map((p, i) => (
+        <mesh
+          key={i}
+          position={[p.x, storey.wallHeight + storey.parapetHeight / 2, p.z]}
+          rotation={[0, p.rot, 0]}
+          castShadow
+          receiveShadow
+        >
+          <boxGeometry args={[model.parapetThickness, storey.parapetHeight, p.len]} />
+          <meshStandardMaterial color="#c8cbcd" roughness={0.95} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/** Tilted rafters + 1 sq ft concrete footings under a panel group. */
+function Racking({ model, group }: { model: CadModel; group: PanelGroup }) {
+  const spec = model.panel;
+  const tilt = (PANEL_TILT_DEG * Math.PI) / 180;
+  const extentX = group.cols * (spec.width + spec.gapX);
+  const extentZ = group.rows * (spec.length + spec.gapZ);
+  const kw = (group.cols * group.rows * spec.watt) / 1000;
+  const n = rafterCount(kw);
+  const surf = roofSurfaceAt(model, { x: group.x, z: group.z });
+  const baseY = surf ? surf.y : model.wallHeight;
+  const rise = extentZ * Math.tan(tilt);
+  const beamLen = extentZ / Math.cos(tilt);
+  const xs = Array.from({ length: n }, (_, i) =>
+    group.x + (n === 1 ? 0 : (i / (n - 1) - 0.5) * extentX),
+  );
+  const footY = baseY + FOOTING_M / 2;
+  return (
+    <group>
+      {xs.map((x, i) => (
+        <group key={i}>
+          <mesh position={[x, baseY + MOUNT_CLEARANCE + rise / 2, group.z]} rotation={[tilt, 0, 0]} castShadow>
+            <boxGeometry args={[0.06, 0.09, beamLen]} />
+            <meshStandardMaterial color="#8a9298" metalness={0.4} roughness={0.5} />
+          </mesh>
+          {[-1, 1].map((s) => (
+            <mesh key={s} position={[x, footY, group.z + (s * extentZ) / 2]} castShadow receiveShadow>
+              <boxGeometry args={[FOOTING_M, FOOTING_M, FOOTING_M]} />
+              <meshStandardMaterial color="#9aa0a4" roughness={1} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+    </group>
+  );
+}
+
 function TreeMesh({
   tree,
   selected,
