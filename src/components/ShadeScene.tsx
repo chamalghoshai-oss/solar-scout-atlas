@@ -136,7 +136,10 @@ export function ShadeScene({
       <Canvas
         shadows
         dpr={[1, 2]}
-        camera={{ position: [dims.length * 1.1 + 8, dims.wallHeight + 14, dims.width * 1.4 + 12], fov: 42 }}
+        camera={{
+          position: [dims.length * 0.75 + 3, dims.wallHeight + dims.length * 0.55 + 2, dims.width * 0.95 + 5],
+          fov: 38,
+        }}
       >
         <Suspense fallback={null}>
           <Sky sunPosition={sunVec} turbidity={4} rayleigh={dayLight ? 0.6 : 5} mieCoefficient={0.008} />
@@ -187,10 +190,9 @@ function Ground({ span }: { span: number }) {
         <planeGeometry args={[span * 6, span * 6]} />
         <meshStandardMaterial color="#b9bfc2" roughness={1} />
       </mesh>
-      {/* faint plot outline, like a site plan under the model */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
-        <ringGeometry args={[span * 0.9, span * 0.92, 64]} />
-        <meshBasicMaterial color="#9aa3a8" transparent opacity={0.35} />
+        <planeGeometry args={[span * 1.1, span * 1.1]} />
+        <meshStandardMaterial color="#a9b0b3" roughness={1} />
       </mesh>
     </group>
   );
