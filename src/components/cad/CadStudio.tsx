@@ -263,6 +263,43 @@ export function CadStudio({
         <SceneFallback />
       )}
 
+      {/* Sun controls — directly under the 3D view */}
+      <div className="rounded-xl border border-border bg-card p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-sm font-semibold">
+            <Sun className="h-4 w-4 text-primary" />
+            {formatHour(hour)} ·{" "}
+            {new Date(Date.UTC(year, 0, 1) + (dayOfYear - 1) * 86400000).toLocaleDateString(undefined, {
+              day: "numeric",
+              month: "short",
+              timeZone: "UTC",
+            })}
+          </div>
+          <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setPlaying((p) => !p)}>
+            {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+          </Button>
+        </div>
+        <Label className="text-[11px] text-muted-foreground">Time of day (6 am – 6 pm)</Label>
+        <Slider className="my-2" min={6} max={18} step={0.25} value={[hour]} onValueChange={([v]) => setHour(v)} />
+        <Label className="text-[11px] text-muted-foreground">Day of year</Label>
+        <Slider className="my-2" min={1} max={365} step={1} value={[dayOfYear]} onValueChange={([v]) => setDayOfYear(v)} />
+        <div className="flex flex-wrap gap-1">
+          {MONTH_LABELS.map((m, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setDayOfYear(MONTH_STARTS[i] + 14)}
+              className="rounded border border-border px-1.5 py-0.5 text-[10px] hover:bg-muted"
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Sun elevation {((pos.altitude * 180) / Math.PI).toFixed(1)}° · azimuth {((pos.azimuth * 180) / Math.PI).toFixed(0)}°
+        </p>
+      </div>
+
       {/* Live totals */}
       <div className="grid grid-cols-3 gap-2 text-center">
         <Stat label="Panels" value={String(panels.length)} />
@@ -408,43 +445,6 @@ export function CadStudio({
           )}
         </div>
       )}
-
-      {/* Sun controls */}
-      <div className="rounded-xl border border-border bg-card p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-sm font-semibold">
-            <Sun className="h-4 w-4 text-primary" />
-            {formatHour(hour)} ·{" "}
-            {new Date(Date.UTC(year, 0, 1) + (dayOfYear - 1) * 86400000).toLocaleDateString(undefined, {
-              day: "numeric",
-              month: "short",
-              timeZone: "UTC",
-            })}
-          </div>
-          <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => setPlaying((p) => !p)}>
-            {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-          </Button>
-        </div>
-        <Label className="text-[11px] text-muted-foreground">Time of day (6 am – 6 pm)</Label>
-        <Slider className="my-2" min={6} max={18} step={0.25} value={[hour]} onValueChange={([v]) => setHour(v)} />
-        <Label className="text-[11px] text-muted-foreground">Day of year</Label>
-        <Slider className="my-2" min={1} max={365} step={1} value={[dayOfYear]} onValueChange={([v]) => setDayOfYear(v)} />
-        <div className="flex flex-wrap gap-1">
-          {MONTH_LABELS.map((m, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => setDayOfYear(MONTH_STARTS[i] + 14)}
-              className="rounded border border-border px-1.5 py-0.5 text-[10px] hover:bg-muted"
-            >
-              {m}
-            </button>
-          ))}
-        </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Sun elevation {((pos.altitude * 180) / Math.PI).toFixed(1)}° · azimuth {((pos.azimuth * 180) / Math.PI).toFixed(0)}°
-        </p>
-      </div>
 
       {/* Heatmap */}
       <div className="rounded-xl border border-border bg-card p-3">
