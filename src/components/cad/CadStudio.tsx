@@ -445,13 +445,17 @@ export function CadStudio({
             <div className="grid grid-cols-2 gap-2">
               {selPrim.kind === "block" ? (
                 <>
-                  <NumField label="Width (m)" value={selPrim.w} onChange={(v) => updPrim(setModel, selPrim.id, { w: v })} />
-                  <NumField label="Depth (m)" value={selPrim.d} onChange={(v) => updPrim(setModel, selPrim.id, { d: v })} />
+                  <NumField label="Length (m)" value={selPrim.w} onChange={(v) => updPrim(setModel, selPrim.id, { w: Math.max(0.05, v) })} />
+                  <NumField label="Breadth (m)" value={selPrim.d} onChange={(v) => updPrim(setModel, selPrim.id, { d: Math.max(0.05, v) })} />
                 </>
               ) : (
-                <NumField label="Radius (m)" value={selPrim.r} onChange={(v) => updPrim(setModel, selPrim.id, { r: v })} />
+                <NumField
+                  label="Diameter (m)"
+                  value={Math.round(selPrim.r * 200) / 100}
+                  onChange={(v) => updPrim(setModel, selPrim.id, { r: Math.max(0.025, v / 2) })}
+                />
               )}
-              <NumField label="Height (m)" value={selPrim.h} onChange={(v) => updPrim(setModel, selPrim.id, { h: v })} />
+              <NumField label="Height (m)" value={selPrim.h} onChange={(v) => updPrim(setModel, selPrim.id, { h: Math.max(0.05, v) })} />
               <NumField label="Rotation (°)" value={selPrim.rotY} onChange={(v) => updPrim(setModel, selPrim.id, { rotY: v })} />
               <div className="col-span-2 flex items-center justify-between rounded-md border border-border px-2 py-1.5">
                 <Label className="text-[11px] text-muted-foreground">Sits on roof</Label>
@@ -481,9 +485,8 @@ export function CadStudio({
                 onChange={(v) => patch({ panel: { ...model.panel, watt: Math.max(50, v) } })}
               />
               <p className="col-span-2 text-[11px] text-muted-foreground">
-                {model.roofType === "flat"
-                  ? "Flat roof: panels lie flush at 0° tilt."
-                  : "Sloped roof: panel tilt follows the roof slope automatically."}
+                Panels are always mounted at 11° facing south on rafters, with 1 sq ft concrete footings — on both
+                flat and sloped roofs. Rafters scale with size (3 kW → 4, 5 kW → 6).
               </p>
             </div>
           )}
