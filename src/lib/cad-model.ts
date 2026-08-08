@@ -235,22 +235,23 @@ export function storeyTopY(m: CadModel, s: Storey): number {
   return storeyBaseY(m, s) + s.wallHeight;
 }
 
-/** Roof faces for the current model. Flat = one horizontal face. */
-export function buildRoofFaces(m: CadModel): RoofFace[] {
-  const fp = m.footprint;
+/** Auto ridge line for a storey: along the longer bounding axis, through the centre. */
+export function storeyRidge(m: CadModel, s: Storey): Ridge {
+  const b = polyBounds(s.footprint);
+  const c = centroid(s.footprint);
+  const dx = b.maxX - b.minX;
+  const dz = b.maxZ - b.minZ;
+  const top = storeyTopY(m, s);
+  const height = top + Math.max(0.3, s.ridgeHeight ?? 1.8);
+  return dx >= dz
+    ? { a: { x: b.minX + dx * 0.2, z: c.z }, b: { x: b.maxX - dx * 0.2, z: c.z }, height }
+    : { a: { x: c.x, z: b.minZ + dz * 0.2 }, b: { x: c.x, z: b.maxZ - dz * 0.2 }, height };
+}
+
+/** Gable roof faces from a footprint, eave height and ridge line. */
+export function gableFaces(fp: Pt[], eaveY: number, ridge: Ridge): RoofFace[] {
   const out: RoofFace[] = [];
-  for (const s of m.storeys) {
-    if (s.footprint.length < 3) continue;
-    const f = faceFromVerts(s.footprint.map((p) => [p.x, storeyTopY(m, s), p.z] as Vec3));
-    if (f) out.push(f);
-  }
-  if (fp.length < 3) return out;
-  if (m.roofType === "flat") {
-    const f = faceFromVerts(fp.map((p) => [p.x, m.wallHeight, p.z] as Vec3));
-    if (f) out.push(f);
-    return out;
-  }
-  const { a, b, height } = m.ridge;
+  const { a, b, height } = ridge;
   for (let i = 0; i < fp.length; i++) {
     const p1 = fp[i];
     const p2 = fp[(i + 1) % fp.length];
@@ -259,19 +260,47 @@ export function buildRoofFaces(m: CadModel): RoofFace[] {
     const same = Math.hypot(r1.x - r2.x, r1.z - r2.z) < 0.05;
     const verts: Vec3[] = same
       ? [
-          [p1.x, m.wallHeight, p1.z],
-          [p2.x, m.wallHeight, p2.z],
+          [p1.x, eaveY, p1.z],
+          [p2.x, eaveY, p2.z],
           [r1.x, height, r1.z],
         ]
       : [
-          [p1.x, m.wallHeight, p1.z],
-          [p2.x, m.wallHeight, p2.z],
+          [p1.x, eaveY, p1.z],
+          [p2.x, eaveY, p2.z],
           [r2.x, height, r2.z],
           [r1.x, height, r1.z],
         ];
     const f = faceFromVerts(verts);
     if (f) out.push(f);
   }
+  return out;
+}
+
+/** Roof faces of a single extra building / storey. */
+export function storeyRoofFaces(m: CadModel, s: Storey): RoofFace[] {
+  if (s.footprint.length < 3) return [];
+  const top = storeyTopY(m, s);
+  if ((s.roofType ?? "flat") === "sloped") {
+    return gableFaces(s.footprint, top, storeyRidge(m, s));
+  }
+  const f = faceFromVerts(s.footprint.map((p) => [p.x, top, p.z] as Vec3));
+  return f ? [f] : [];
+}
+
+/** Roof faces for the current model. Flat = one horizontal face. */
+export function buildRoofFaces(m: CadModel): RoofFace[] {
+  const fp = m.footprint;
+  const out: RoofFace[] = [];
+  for (const s of m.storeys) {
+    out.push(...storeyRoofFaces(m, s));
+  }
+  if (fp.length < 3) return out;
+  if (m.roofType === "flat") {
+    const f = faceFromVerts(fp.map((p) => [p.x, m.wallHeight, p.z] as Vec3));
+    if (f) out.push(f);
+    return out;
+  }
+  out.push(...gableFaces(fp, m.wallHeight, m.ridge));
   return out;
 }
 
