@@ -369,11 +369,34 @@ export function CadStudio({
                     value={s.wallHeight}
                     onChange={(v) => updStorey(setModel, s.id, { wallHeight: Math.max(0.5, v) })}
                   />
-                  <NumField
-                    label="Parapet (m)"
-                    value={s.parapetHeight}
-                    onChange={(v) => updStorey(setModel, s.id, { parapetHeight: Math.max(0, v) })}
-                  />
+                  {(s.roofType ?? "flat") === "flat" ? (
+                    <NumField
+                      label="Parapet (m)"
+                      value={s.parapetHeight}
+                      onChange={(v) => updStorey(setModel, s.id, { parapetHeight: Math.max(0, v) })}
+                    />
+                  ) : (
+                    <NumField
+                      label="Ridge rise (m)"
+                      value={s.ridgeHeight ?? 1.8}
+                      onChange={(v) => updStorey(setModel, s.id, { ridgeHeight: Math.max(0.3, v) })}
+                    />
+                  )}
+                  <div className="col-span-2 flex items-center justify-between">
+                    <Label className="text-[11px] text-muted-foreground">Roof</Label>
+                    <div className="flex overflow-hidden rounded-md border border-border text-[11px]">
+                      {(["flat", "sloped"] as const).map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => updStorey(setModel, s.id, { roofType: t })}
+                          className={`px-2.5 py-1 capitalize ${(s.roofType ?? "flat") === t ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
