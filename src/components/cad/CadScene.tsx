@@ -825,7 +825,7 @@ export function CadScene({
             const surf = roofSurfaceAt(model, { x: g.x, z: g.z });
             return (
               <group key={g.id}>
-              <Racking model={model} group={g} />
+              <Legs model={model} group={g} panels={e.panels} />
               <PanelGroupMesh
                 panels={e.panels}
                 access={e.access}
