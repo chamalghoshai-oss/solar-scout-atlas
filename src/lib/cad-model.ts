@@ -518,6 +518,20 @@ export function buildCasters(m: CadModel): Caster[] {
     if (s.footprint.length < 3) continue;
     const base = storeyBaseY(m, s);
     const top = base + s.wallHeight + Math.max(0, s.parapetHeight);
+    if ((s.roofType ?? "flat") === "sloped") {
+      const rg = storeyRidge(m, s);
+      const len = Math.max(0.5, Math.hypot(rg.b.x - rg.a.x, rg.b.z - rg.a.z));
+      out.push({
+        kind: "obb",
+        cx: (rg.a.x + rg.b.x) / 2,
+        cz: (rg.a.z + rg.b.z) / 2,
+        w: 0.3,
+        d: len,
+        minY: base + s.wallHeight,
+        maxY: rg.height,
+        rotY: (Math.atan2(rg.b.x - rg.a.x, rg.b.z - rg.a.z) * 180) / Math.PI,
+      });
+    }
     for (let i = 0; i < s.footprint.length; i++) {
       const p1 = s.footprint[i];
       const p2 = s.footprint[(i + 1) % s.footprint.length];
