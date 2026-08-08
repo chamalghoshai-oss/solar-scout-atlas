@@ -328,6 +328,11 @@ export function CadStudio({
           <Tool icon={<Grid3X3 className="h-3.5 w-3.5" />} label="Panel grid" onClick={addGroup} />
           <Tool
             icon={<Building2 className="h-3.5 w-3.5" />}
+            label="Building model"
+            onClick={() => addPrim("model")}
+          />
+          <Tool
+            icon={<Building2 className="h-3.5 w-3.5" />}
             label="Add building / storey"
             onClick={() => setDraw("storey")}
           />
