@@ -12,7 +12,7 @@ export type Ridge = { a: Pt; b: Pt; height: number };
 
 export type Prim = {
   id: string;
-  kind: "block" | "cylinder";
+  kind: "block" | "cylinder" | "model";
   x: number;
   z: number;
   /** placement base: on the roof surface or on the ground */
@@ -22,7 +22,12 @@ export type Prim = {
   d: number; // block depth (z, local)
   r: number; // cylinder radius
   h: number; // height
+  /** realistic building model key when kind === "model" */
+  asset?: BuildingAsset;
 };
+
+export type BuildingAsset = "venice" | "ichijoushi";
+export type TreeSpecies = "generic" | "leafy" | "coconut" | "coconut_palm" | "mango";
 
 export type Tree = {
   id: string;
@@ -32,6 +37,8 @@ export type Tree = {
   h: number;
   /** canopy radius */
   r: number;
+  /** 3D model used for rendering; "generic" is the simple stylised tree */
+  species?: TreeSpecies;
 };
 
 export type PanelSpec = {
@@ -57,6 +64,9 @@ export type PanelGroup = {
   x: number;
   z: number;
   rotY: number; // degrees, 0 = rows run north-south
+  /** "single" = whole array lies in one common plane, "surface" = each panel
+   *  follows the roof surface underneath it. */
+  planeMode?: "single" | "surface";
 };
 
 /** An additional building block. Sits on the main roof when it overlaps it,
@@ -66,6 +76,9 @@ export type Storey = {
   footprint: Pt[];
   wallHeight: number;
   parapetHeight: number;
+  roofType?: RoofType;
+  /** ridge apex height above the storey base when roofType === "sloped" */
+  ridgeHeight?: number;
 };
 
 /** Fixed panel tilt: always 11° facing south. */
@@ -222,22 +235,23 @@ export function storeyTopY(m: CadModel, s: Storey): number {
   return storeyBaseY(m, s) + s.wallHeight;
 }
 
-/** Roof faces for the current model. Flat = one horizontal face. */
-export function buildRoofFaces(m: CadModel): RoofFace[] {
-  const fp = m.footprint;
+/** Auto ridge line for a storey: along the longer bounding axis, through the centre. */
+export function storeyRidge(m: CadModel, s: Storey): Ridge {
+  const b = polyBounds(s.footprint);
+  const c = centroid(s.footprint);
+  const dx = b.maxX - b.minX;
+  const dz = b.maxZ - b.minZ;
+  const top = storeyTopY(m, s);
+  const height = top + Math.max(0.3, s.ridgeHeight ?? 1.8);
+  return dx >= dz
+    ? { a: { x: b.minX + dx * 0.2, z: c.z }, b: { x: b.maxX - dx * 0.2, z: c.z }, height }
+    : { a: { x: c.x, z: b.minZ + dz * 0.2 }, b: { x: c.x, z: b.maxZ - dz * 0.2 }, height };
+}
+
+/** Gable roof faces from a footprint, eave height and ridge line. */
+export function gableFaces(fp: Pt[], eaveY: number, ridge: Ridge): RoofFace[] {
   const out: RoofFace[] = [];
-  for (const s of m.storeys) {
-    if (s.footprint.length < 3) continue;
-    const f = faceFromVerts(s.footprint.map((p) => [p.x, storeyTopY(m, s), p.z] as Vec3));
-    if (f) out.push(f);
-  }
-  if (fp.length < 3) return out;
-  if (m.roofType === "flat") {
-    const f = faceFromVerts(fp.map((p) => [p.x, m.wallHeight, p.z] as Vec3));
-    if (f) out.push(f);
-    return out;
-  }
-  const { a, b, height } = m.ridge;
+  const { a, b, height } = ridge;
   for (let i = 0; i < fp.length; i++) {
     const p1 = fp[i];
     const p2 = fp[(i + 1) % fp.length];
@@ -246,19 +260,47 @@ export function buildRoofFaces(m: CadModel): RoofFace[] {
     const same = Math.hypot(r1.x - r2.x, r1.z - r2.z) < 0.05;
     const verts: Vec3[] = same
       ? [
-          [p1.x, m.wallHeight, p1.z],
-          [p2.x, m.wallHeight, p2.z],
+          [p1.x, eaveY, p1.z],
+          [p2.x, eaveY, p2.z],
           [r1.x, height, r1.z],
         ]
       : [
-          [p1.x, m.wallHeight, p1.z],
-          [p2.x, m.wallHeight, p2.z],
+          [p1.x, eaveY, p1.z],
+          [p2.x, eaveY, p2.z],
           [r2.x, height, r2.z],
           [r1.x, height, r1.z],
         ];
     const f = faceFromVerts(verts);
     if (f) out.push(f);
   }
+  return out;
+}
+
+/** Roof faces of a single extra building / storey. */
+export function storeyRoofFaces(m: CadModel, s: Storey): RoofFace[] {
+  if (s.footprint.length < 3) return [];
+  const top = storeyTopY(m, s);
+  if ((s.roofType ?? "flat") === "sloped") {
+    return gableFaces(s.footprint, top, storeyRidge(m, s));
+  }
+  const f = faceFromVerts(s.footprint.map((p) => [p.x, top, p.z] as Vec3));
+  return f ? [f] : [];
+}
+
+/** Roof faces for the current model. Flat = one horizontal face. */
+export function buildRoofFaces(m: CadModel): RoofFace[] {
+  const fp = m.footprint;
+  const out: RoofFace[] = [];
+  for (const s of m.storeys) {
+    out.push(...storeyRoofFaces(m, s));
+  }
+  if (fp.length < 3) return out;
+  if (m.roofType === "flat") {
+    const f = faceFromVerts(fp.map((p) => [p.x, m.wallHeight, p.z] as Vec3));
+    if (f) out.push(f);
+    return out;
+  }
+  out.push(...gableFaces(fp, m.wallHeight, m.ridge));
   return out;
 }
 
@@ -309,9 +351,15 @@ export function layoutGroup(m: CadModel, g: PanelGroup, faces?: RoofFace[]): Pla
   const sin = Math.sin(yaw);
   const pitchX = spec.width + spec.gapX;
   const pitchZ = spec.length + spec.gapZ;
-  let index = 0;
   const tilt = (PANEL_TILT_DEG * Math.PI) / 180;
   const rise = (spec.length / 2) * Math.sin(tilt);
+  const slope = Math.tan(tilt);
+  const single = (g.planeMode ?? "single") === "single";
+
+  // first pass: cell centres + supporting roof surface
+  type Cell = { index: number; x: number; z: number; y: number | null };
+  const cells: Cell[] = [];
+  let index = 0;
   for (let r = 0; r < g.rows; r++) {
     for (let c = 0; c < g.cols; c++) {
       const lx = (c - (g.cols - 1) / 2) * pitchX;
@@ -319,26 +367,33 @@ export function layoutGroup(m: CadModel, g: PanelGroup, faces?: RoofFace[]): Pla
       const x = g.x + lx * cos - lz * sin;
       const z = g.z + lx * sin + lz * cos;
       const surf = roofSurfaceAt(m, { x, z }, fs);
-      if (!surf) {
-        index++;
-        continue;
-      }
-      // panels always sit at a fixed 11° tilt facing south, on racking
-      out.push({
-        groupId: g.id,
-        index,
-        pos: [x, surf.y + PANEL_CLEARANCE + MOUNT_CLEARANCE + rise, z],
-        yaw: 0,
-        tilt,
-      });
-      index++;
+      cells.push({ index: index++, x, z, y: surf ? surf.y : null });
     }
+  }
+
+  // Panels always face south at a fixed 11° measured from ground level. In
+  // "single" mode every panel of the group lies in one common tilted plane
+  // (legs grow to clear the roof); in "surface" mode each panel hugs the
+  // surface below it.
+  const lift = PANEL_CLEARANCE + MOUNT_CLEARANCE + rise;
+  let planeRefY = -Infinity;
+  if (single) {
+    for (const cell of cells) {
+      if (cell.y == null) continue;
+      planeRefY = Math.max(planeRefY, cell.y + lift + (cell.z - g.z) * slope);
+    }
+  }
+  for (const cell of cells) {
+    if (cell.y == null) continue;
+    const y =
+      single && planeRefY > -Infinity ? planeRefY - (cell.z - g.z) * slope : cell.y + lift;
+    out.push({ groupId: g.id, index: cell.index, pos: [cell.x, y, cell.z], yaw: 0, tilt });
   }
   return out;
 }
 
-/** Rafter count for a system size: 3 kW → 4, 5 kW → 6 … (kW + 1, min 2). */
-export function rafterCount(kw: number): number {
+/** Support-leg count for a system size: 3 kW → 4, 5 kW → 6 … (kW + 1, min 2). */
+export function legCount(kw: number): number {
   return Math.max(2, Math.round(kw) + 1);
 }
 
@@ -463,6 +518,20 @@ export function buildCasters(m: CadModel): Caster[] {
     if (s.footprint.length < 3) continue;
     const base = storeyBaseY(m, s);
     const top = base + s.wallHeight + Math.max(0, s.parapetHeight);
+    if ((s.roofType ?? "flat") === "sloped") {
+      const rg = storeyRidge(m, s);
+      const len = Math.max(0.5, Math.hypot(rg.b.x - rg.a.x, rg.b.z - rg.a.z));
+      out.push({
+        kind: "obb",
+        cx: (rg.a.x + rg.b.x) / 2,
+        cz: (rg.a.z + rg.b.z) / 2,
+        w: 0.3,
+        d: len,
+        minY: base + s.wallHeight,
+        maxY: rg.height,
+        rotY: (Math.atan2(rg.b.x - rg.a.x, rg.b.z - rg.a.z) * 180) / Math.PI,
+      });
+    }
     for (let i = 0; i < s.footprint.length; i++) {
       const p1 = s.footprint[i];
       const p2 = s.footprint[(i + 1) % s.footprint.length];

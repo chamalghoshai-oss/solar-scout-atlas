@@ -25,6 +25,7 @@ import {
 } from "@/lib/cad-model";
 import { FootprintCanvas, type DrawMode } from "@/components/cad/FootprintCanvas";
 import type { Selection } from "@/components/cad/CadScene";
+import { BUILDING_OPTIONS, TREE_OPTIONS } from "@/lib/cad-assets";
 
 const CadScene = lazy(() => import("@/components/cad/CadScene").then((m) => ({ default: m.CadScene })));
 
@@ -152,19 +153,20 @@ export function CadStudio({
     setDraw(null);
   }
 
-  function addPrim(kind: "block" | "cylinder") {
+  function addPrim(kind: "block" | "cylinder" | "model") {
     if (!hasRoof) return toast.error("Draw the roof outline first");
     const p = {
       id: uid(kind),
       kind,
       x: 0,
       z: 0,
-      base: "roof" as const,
+      base: (kind === "model" ? "ground" : "roof") as "roof" | "ground",
       rotY: 0,
-      w: 1.5,
-      d: 1.2,
+      w: kind === "model" ? 8 : 1.5,
+      d: kind === "model" ? 8 : 1.2,
       r: 0.5,
-      h: kind === "block" ? 1.2 : 1.6,
+      h: kind === "model" ? 7 : kind === "block" ? 1.2 : 1.6,
+      ...(kind === "model" ? { asset: "venice" as const } : {}),
     };
     setModel((m) => ({ ...m, prims: [...m.prims, p] }));
     setSelection({ kind: "prim", id: p.id });
@@ -172,14 +174,14 @@ export function CadStudio({
 
   function addTree() {
     const b = hasRoof ? polyBounds(model.footprint) : { maxX: 6, minZ: 0, minX: -6, maxZ: 0 };
-    const t = { id: uid("tree"), x: b.maxX + 4, z: 0, h: 8, r: 2.2 };
+    const t = { id: uid("tree"), x: b.maxX + 4, z: 0, h: 8, r: 2.2, species: "coconut" as const };
     setModel((m) => ({ ...m, trees: [...m.trees, t] }));
     setSelection({ kind: "tree", id: t.id });
   }
 
   function addGroup() {
     if (!hasRoof) return toast.error("Draw the roof outline first");
-    const g = { id: uid("grp"), cols: 4, rows: 3, x: 0, z: 0, rotY: 0 };
+    const g = { id: uid("grp"), cols: 4, rows: 3, x: 0, z: 0, rotY: 0, planeMode: "single" as const };
     setModel((m) => ({ ...m, groups: [...m.groups, g] }));
     setSelection({ kind: "group", id: g.id });
   }
@@ -326,6 +328,11 @@ export function CadStudio({
           <Tool icon={<Grid3X3 className="h-3.5 w-3.5" />} label="Panel grid" onClick={addGroup} />
           <Tool
             icon={<Building2 className="h-3.5 w-3.5" />}
+            label="Building model"
+            onClick={() => addPrim("model")}
+          />
+          <Tool
+            icon={<Building2 className="h-3.5 w-3.5" />}
             label="Add building / storey"
             onClick={() => setDraw("storey")}
           />
@@ -362,11 +369,34 @@ export function CadStudio({
                     value={s.wallHeight}
                     onChange={(v) => updStorey(setModel, s.id, { wallHeight: Math.max(0.5, v) })}
                   />
-                  <NumField
-                    label="Parapet (m)"
-                    value={s.parapetHeight}
-                    onChange={(v) => updStorey(setModel, s.id, { parapetHeight: Math.max(0, v) })}
-                  />
+                  {(s.roofType ?? "flat") === "flat" ? (
+                    <NumField
+                      label="Parapet (m)"
+                      value={s.parapetHeight}
+                      onChange={(v) => updStorey(setModel, s.id, { parapetHeight: Math.max(0, v) })}
+                    />
+                  ) : (
+                    <NumField
+                      label="Ridge rise (m)"
+                      value={s.ridgeHeight ?? 1.8}
+                      onChange={(v) => updStorey(setModel, s.id, { ridgeHeight: Math.max(0.3, v) })}
+                    />
+                  )}
+                  <div className="col-span-2 flex items-center justify-between">
+                    <Label className="text-[11px] text-muted-foreground">Roof</Label>
+                    <div className="flex overflow-hidden rounded-md border border-border text-[11px]">
+                      {(["flat", "sloped"] as const).map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => updStorey(setModel, s.id, { roofType: t })}
+                          className={`px-2.5 py-1 capitalize ${(s.roofType ?? "flat") === t ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
@@ -443,7 +473,23 @@ export function CadStudio({
 
           {selPrim && (
             <div className="grid grid-cols-2 gap-2">
-              {selPrim.kind === "block" ? (
+              {selPrim.kind === "model" ? (
+                <div className="col-span-2">
+                  <Label className="text-[11px] text-muted-foreground">Building model</Label>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {BUILDING_OPTIONS.map((o) => (
+                      <button
+                        key={o.value}
+                        type="button"
+                        onClick={() => updPrim(setModel, selPrim.id, { asset: o.value })}
+                        className={`rounded border px-2 py-1 text-[11px] ${(selPrim.asset ?? "venice") === o.value ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-muted"}`}
+                      >
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : selPrim.kind === "block" ? (
                 <>
                   <NumField label="Length (m)" value={selPrim.w} onChange={(v) => updPrim(setModel, selPrim.id, { w: Math.max(0.05, v) })} />
                   <NumField label="Breadth (m)" value={selPrim.d} onChange={(v) => updPrim(setModel, selPrim.id, { d: Math.max(0.05, v) })} />
@@ -469,6 +515,21 @@ export function CadStudio({
 
           {selTree && (
             <div className="grid grid-cols-2 gap-2">
+              <div className="col-span-2">
+                <Label className="text-[11px] text-muted-foreground">Tree type</Label>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {TREE_OPTIONS.map((o) => (
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() => updTree(setModel, selTree.id, { species: o.value })}
+                      className={`rounded border px-2 py-1 text-[11px] ${(selTree.species ?? "generic") === o.value ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-muted"}`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <NumField label="Height (m)" value={selTree.h} onChange={(v) => updTree(setModel, selTree.id, { h: v })} />
               <NumField label="Canopy radius (m)" value={selTree.r} onChange={(v) => updTree(setModel, selTree.id, { r: v })} />
             </div>
@@ -484,9 +545,29 @@ export function CadStudio({
                 value={model.panel.watt}
                 onChange={(v) => patch({ panel: { ...model.panel, watt: Math.max(50, v) } })}
               />
+              <div className="col-span-2 flex items-center justify-between rounded-md border border-border px-2 py-1.5">
+                <Label className="text-[11px] text-muted-foreground">Mounting plane</Label>
+                <div className="flex overflow-hidden rounded-md border border-border text-[11px]">
+                  {([
+                    { v: "single", l: "Same plane" },
+                    { v: "surface", l: "Follow surface" },
+                  ] as const).map((o) => (
+                    <button
+                      key={o.v}
+                      type="button"
+                      onClick={() => updGroup(setModel, selGroup.id, { planeMode: o.v })}
+                      className={`px-2.5 py-1 ${(selGroup.planeMode ?? "single") === o.v ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                    >
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <p className="col-span-2 text-[11px] text-muted-foreground">
-                Panels are always mounted at 11° facing south on rafters, with 1 sq ft concrete footings — on both
-                flat and sloped roofs. Rafters scale with size (3 kW → 4, 5 kW → 6).
+                Panels always sit at 11° from ground level facing south, on support columns (legs) with 1 sq ft
+                concrete footings. On a sloped roof the legs land on the sloped surface and grow to keep that 11°.
+                In "Same plane" every module of the group shares one continuous plane; "Follow surface" lets each
+                module hug the roof below it. Legs scale with size (3 kW → 4, 5 kW → 6).
               </p>
             </div>
           )}

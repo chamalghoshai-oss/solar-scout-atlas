@@ -1,18 +1,21 @@
 import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
-import { OrbitControls, Sky } from "@react-three/drei";
+import { OrbitControls, Sky, useGLTF } from "@react-three/drei";
 import { Suspense, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import {
   buildRoofFaces,
   FOOTING_M,
+  gableFaces,
+  legCount,
   MOUNT_CLEARANCE,
   PANEL_TILT_DEG,
   polyBounds,
   primBaseY,
-  rafterCount,
   roofSurfaceAt,
   shadeRamp,
   storeyBaseY,
+  storeyRidge,
+  storeyTopY,
   type CadModel,
   type PanelGroup,
   type PlacedPanel,
@@ -21,6 +24,7 @@ import {
   type Tree,
   type Vec3,
 } from "@/lib/cad-model";
+import { BUILDING_MODELS, TREE_MODELS } from "@/lib/cad-assets";
 
 export type Selection = { kind: "prim" | "tree" | "group"; id: string } | null;
 
@@ -309,6 +313,35 @@ function PrimMesh({
   const baseY = primBaseY(model, prim);
   const drag = useDrag(baseY, onMove, setDragging);
   const color = selected ? "#f97316" : prim.kind === "cylinder" ? "#dcdfe1" : "#b6bcc0";
+  if (prim.kind === "model") {
+    return (
+      <group
+        position={[prim.x, baseY, prim.z]}
+        onPointerDown={(e) => {
+          onSelect();
+          drag.onPointerDown(e, [prim.x, prim.z]);
+        }}
+        onPointerMove={drag.onPointerMove}
+        onPointerUp={drag.onPointerUp}
+      >
+        <Suspense
+          fallback={
+            <mesh position={[0, prim.h / 2, 0]}>
+              <boxGeometry args={[prim.w, prim.h, prim.d]} />
+              <meshStandardMaterial color="#c3c8cb" />
+            </mesh>
+          }
+        >
+          <GltfModel
+            url={BUILDING_MODELS[prim.asset ?? "venice"]}
+            height={prim.h}
+            rotY={prim.rotY}
+            tint={selected ? "#f97316" : undefined}
+          />
+        </Suspense>
+      </group>
+    );
+  }
   return (
     <mesh
       position={[prim.x, baseY + prim.h / 2, prim.z]}
@@ -335,6 +368,7 @@ function PrimMesh({
 /** Extra building block (adjacent building or upper storey). */
 function StoreyMesh({ model, storey }: { model: CadModel; storey: Storey }) {
   const base = storeyBaseY(model, storey);
+  const sloped = (storey.roofType ?? "flat") === "sloped";
   const walls = useMemo(() => {
     if (storey.footprint.length < 3) return null;
     const g = new THREE.ExtrudeGeometry(shapeFromPts(storey.footprint), {
@@ -346,15 +380,32 @@ function StoreyMesh({ model, storey }: { model: CadModel; storey: Storey }) {
   }, [storey.footprint, storey.wallHeight]);
 
   const deck = useMemo(() => {
-    if (storey.footprint.length < 3) return null;
+    if (storey.footprint.length < 3 || sloped) return null;
     const g = new THREE.ShapeGeometry(shapeFromPts(storey.footprint));
     g.rotateX(-Math.PI / 2);
     g.translate(0, storey.wallHeight + 0.02, 0);
     return g;
-  }, [storey.footprint, storey.wallHeight]);
+  }, [storey.footprint, storey.wallHeight, sloped]);
+
+  const slopedGeo = useMemo(() => {
+    if (!sloped || storey.footprint.length < 3) return null;
+    const faces = gableFaces(storey.footprint, storeyTopY(model, storey), storeyRidge(model, storey));
+    const pos: number[] = [];
+    for (const f of faces) {
+      for (let i = 1; i < f.verts.length - 1; i++) {
+        pos.push(...f.verts[0], ...f.verts[i], ...f.verts[i + 1]);
+      }
+    }
+    if (!pos.length) return null;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.computeVertexNormals();
+    g.translate(0, -base, 0);
+    return g;
+  }, [sloped, storey, model, base]);
 
   const parapets = useMemo(() => {
-    if (storey.parapetHeight <= 0) return [];
+    if (storey.parapetHeight <= 0 || sloped) return [];
     const fp = storey.footprint;
     const out: Array<{ x: number; z: number; len: number; rot: number }> = [];
     for (let i = 0; i < fp.length; i++) {
@@ -370,7 +421,7 @@ function StoreyMesh({ model, storey }: { model: CadModel; storey: Storey }) {
       });
     }
     return out;
-  }, [storey.footprint, storey.parapetHeight]);
+  }, [storey.footprint, storey.parapetHeight, sloped]);
 
   if (!walls) return null;
   return (
@@ -381,6 +432,11 @@ function StoreyMesh({ model, storey }: { model: CadModel; storey: Storey }) {
       {deck && (
         <mesh geometry={deck} receiveShadow castShadow>
           <meshStandardMaterial color="#b9bcbe" roughness={0.95} side={THREE.DoubleSide} />
+        </mesh>
+      )}
+      {slopedGeo && (
+        <mesh geometry={slopedGeo} castShadow receiveShadow>
+          <meshStandardMaterial color="#c96a3f" roughness={0.95} side={THREE.DoubleSide} />
         </mesh>
       )}
       {parapets.map((p, i) => (
@@ -399,40 +455,98 @@ function StoreyMesh({ model, storey }: { model: CadModel; storey: Storey }) {
   );
 }
 
-/** Tilted rafters + 1 sq ft concrete footings under a panel group. */
-function Racking({ model, group }: { model: CadModel; group: PanelGroup }) {
+/** Vertical support columns (legs) + 1 sq ft concrete footings under a panel group. */
+function Legs({ model, group, panels }: { model: CadModel; group: PanelGroup; panels: PlacedPanel[] }) {
   const spec = model.panel;
   const tilt = (PANEL_TILT_DEG * Math.PI) / 180;
+  const slope = Math.tan(tilt);
   const extentX = group.cols * (spec.width + spec.gapX);
   const extentZ = group.rows * (spec.length + spec.gapZ);
   const kw = (group.cols * group.rows * spec.watt) / 1000;
-  const n = rafterCount(kw);
-  const surf = roofSurfaceAt(model, { x: group.x, z: group.z });
-  const baseY = surf ? surf.y : model.wallHeight;
-  const rise = extentZ * Math.tan(tilt);
-  const beamLen = extentZ / Math.cos(tilt);
+  const n = legCount(kw);
+  if (!panels.length) return null;
+
+  // panel plane reference height at the group centre line
+  const refY =
+    panels.reduce((a, p) => a + p.pos[1] + (p.pos[2] - group.z) * slope, 0) / panels.length;
+  const topAt = (z: number) => refY - (z - group.z) * slope;
+
   const xs = Array.from({ length: n }, (_, i) =>
     group.x + (n === 1 ? 0 : (i / (n - 1) - 0.5) * extentX),
   );
-  const footY = baseY + FOOTING_M / 2;
+  const zs = [group.z - extentZ / 2 + 0.2, group.z + extentZ / 2 - 0.2];
+
   return (
     <group>
       {xs.map((x, i) => (
         <group key={i}>
-          <mesh position={[x, baseY + MOUNT_CLEARANCE + rise / 2, group.z]} rotation={[tilt, 0, 0]} castShadow>
-            <boxGeometry args={[0.06, 0.09, beamLen]} />
+          {zs.map((z, k) => {
+            const surf = roofSurfaceAt(model, { x, z });
+            const base = surf ? surf.y : model.wallHeight;
+            const footTop = base + FOOTING_M;
+            const top = topAt(z) - 0.04;
+            const h = Math.max(0.05, top - footTop);
+            return (
+              <group key={k}>
+                <mesh position={[x, base + FOOTING_M / 2, z]} castShadow receiveShadow>
+                  <boxGeometry args={[FOOTING_M, FOOTING_M, FOOTING_M]} />
+                  <meshStandardMaterial color="#9aa0a4" roughness={1} />
+                </mesh>
+                <mesh position={[x, footTop + h / 2, z]} castShadow>
+                  <boxGeometry args={[0.07, h, 0.07]} />
+                  <meshStandardMaterial color="#8a9298" metalness={0.4} roughness={0.5} />
+                </mesh>
+              </group>
+            );
+          })}
+          {/* tilted top rail carrying the modules */}
+          <mesh
+            position={[x, topAt(group.z) - 0.06, group.z]}
+            rotation={[tilt, 0, 0]}
+            castShadow
+          >
+            <boxGeometry args={[0.05, 0.05, extentZ / Math.cos(tilt)]} />
             <meshStandardMaterial color="#8a9298" metalness={0.4} roughness={0.5} />
           </mesh>
-          {[-1, 1].map((s) => (
-            <mesh key={s} position={[x, footY, group.z + (s * extentZ) / 2]} castShadow receiveShadow>
-              <boxGeometry args={[FOOTING_M, FOOTING_M, FOOTING_M]} />
-              <meshStandardMaterial color="#9aa0a4" roughness={1} />
-            </mesh>
-          ))}
         </group>
       ))}
     </group>
   );
+}
+
+/** Loads a GLB and scales it so its bounding box height matches `height`. */
+function GltfModel({
+  url,
+  height,
+  rotY = 0,
+  tint,
+}: {
+  url: string;
+  height: number;
+  rotY?: number;
+  tint?: string;
+}) {
+  const gltf = useGLTF(url);
+  const object = useMemo(() => {
+    const o = gltf.scene.clone(true);
+    const box = new THREE.Box3().setFromObject(o);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const s = size.y > 1e-4 ? height / size.y : 1;
+    o.scale.setScalar(s);
+    o.position.y = -box.min.y * s;
+    o.traverse((c) => {
+      const mesh = c as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      if (tint) {
+        mesh.material = new THREE.MeshStandardMaterial({ color: tint, roughness: 0.8 });
+      }
+    });
+    return o;
+  }, [gltf, height, tint]);
+  return <primitive object={object} rotation={[0, (rotY * Math.PI) / 180, 0]} />;
 }
 
 function TreeMesh({
@@ -449,6 +563,35 @@ function TreeMesh({
   setDragging: (v: boolean) => void;
 }) {
   const drag = useDrag(0, onMove, setDragging);
+  const species = tree.species ?? "generic";
+  if (species !== "generic") {
+    return (
+      <group
+        position={[tree.x, 0, tree.z]}
+        onPointerDown={(e) => {
+          onSelect();
+          drag.onPointerDown(e, [tree.x, tree.z]);
+        }}
+        onPointerMove={drag.onPointerMove}
+        onPointerUp={drag.onPointerUp}
+      >
+        <Suspense
+          fallback={
+            <mesh position={[0, tree.h / 2, 0]}>
+              <cylinderGeometry args={[tree.r * 0.2, tree.r * 0.2, tree.h, 8]} />
+              <meshStandardMaterial color="#5d8a4a" />
+            </mesh>
+          }
+        >
+          <GltfModel
+            url={TREE_MODELS[species]}
+            height={tree.h}
+            tint={selected ? "#f97316" : undefined}
+          />
+        </Suspense>
+      </group>
+    );
+  }
   return (
     <group
       position={[tree.x, 0, tree.z]}
@@ -682,7 +825,7 @@ export function CadScene({
             const surf = roofSurfaceAt(model, { x: g.x, z: g.z });
             return (
               <group key={g.id}>
-              <Racking model={model} group={g} />
+              <Legs model={model} group={g} panels={e.panels} />
               <PanelGroupMesh
                 panels={e.panels}
                 access={e.access}
