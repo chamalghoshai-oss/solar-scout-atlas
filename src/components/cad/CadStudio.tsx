@@ -473,7 +473,23 @@ export function CadStudio({
 
           {selPrim && (
             <div className="grid grid-cols-2 gap-2">
-              {selPrim.kind === "block" ? (
+              {selPrim.kind === "model" ? (
+                <div className="col-span-2">
+                  <Label className="text-[11px] text-muted-foreground">Building model</Label>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {BUILDING_OPTIONS.map((o) => (
+                      <button
+                        key={o.value}
+                        type="button"
+                        onClick={() => updPrim(setModel, selPrim.id, { asset: o.value })}
+                        className={`rounded border px-2 py-1 text-[11px] ${(selPrim.asset ?? "venice") === o.value ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-muted"}`}
+                      >
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : selPrim.kind === "block" ? (
                 <>
                   <NumField label="Length (m)" value={selPrim.w} onChange={(v) => updPrim(setModel, selPrim.id, { w: Math.max(0.05, v) })} />
                   <NumField label="Breadth (m)" value={selPrim.d} onChange={(v) => updPrim(setModel, selPrim.id, { d: Math.max(0.05, v) })} />
@@ -499,6 +515,21 @@ export function CadStudio({
 
           {selTree && (
             <div className="grid grid-cols-2 gap-2">
+              <div className="col-span-2">
+                <Label className="text-[11px] text-muted-foreground">Tree type</Label>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {TREE_OPTIONS.map((o) => (
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() => updTree(setModel, selTree.id, { species: o.value })}
+                      className={`rounded border px-2 py-1 text-[11px] ${(selTree.species ?? "generic") === o.value ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-muted"}`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <NumField label="Height (m)" value={selTree.h} onChange={(v) => updTree(setModel, selTree.id, { h: v })} />
               <NumField label="Canopy radius (m)" value={selTree.r} onChange={(v) => updTree(setModel, selTree.id, { r: v })} />
             </div>
@@ -514,9 +545,29 @@ export function CadStudio({
                 value={model.panel.watt}
                 onChange={(v) => patch({ panel: { ...model.panel, watt: Math.max(50, v) } })}
               />
+              <div className="col-span-2 flex items-center justify-between rounded-md border border-border px-2 py-1.5">
+                <Label className="text-[11px] text-muted-foreground">Mounting plane</Label>
+                <div className="flex overflow-hidden rounded-md border border-border text-[11px]">
+                  {([
+                    { v: "single", l: "Same plane" },
+                    { v: "surface", l: "Follow surface" },
+                  ] as const).map((o) => (
+                    <button
+                      key={o.v}
+                      type="button"
+                      onClick={() => updGroup(setModel, selGroup.id, { planeMode: o.v })}
+                      className={`px-2.5 py-1 ${(selGroup.planeMode ?? "single") === o.v ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                    >
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <p className="col-span-2 text-[11px] text-muted-foreground">
-                Panels are always mounted at 11° facing south on rafters, with 1 sq ft concrete footings — on both
-                flat and sloped roofs. Rafters scale with size (3 kW → 4, 5 kW → 6).
+                Panels always sit at 11° from ground level facing south, on support columns (legs) with 1 sq ft
+                concrete footings. On a sloped roof the legs land on the sloped surface and grow to keep that 11°.
+                In "Same plane" every module of the group shares one continuous plane; "Follow surface" lets each
+                module hug the roof below it. Legs scale with size (3 kW → 4, 5 kW → 6).
               </p>
             </div>
           )}
