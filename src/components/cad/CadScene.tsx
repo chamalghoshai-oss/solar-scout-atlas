@@ -1,18 +1,21 @@
 import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
-import { OrbitControls, Sky } from "@react-three/drei";
+import { OrbitControls, Sky, useGLTF } from "@react-three/drei";
 import { Suspense, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import {
   buildRoofFaces,
   FOOTING_M,
+  gableFaces,
+  legCount,
   MOUNT_CLEARANCE,
   PANEL_TILT_DEG,
   polyBounds,
   primBaseY,
-  rafterCount,
   roofSurfaceAt,
   shadeRamp,
   storeyBaseY,
+  storeyRidge,
+  storeyTopY,
   type CadModel,
   type PanelGroup,
   type PlacedPanel,
@@ -21,6 +24,7 @@ import {
   type Tree,
   type Vec3,
 } from "@/lib/cad-model";
+import { BUILDING_MODELS, TREE_MODELS } from "@/lib/cad-assets";
 
 export type Selection = { kind: "prim" | "tree" | "group"; id: string } | null;
 
