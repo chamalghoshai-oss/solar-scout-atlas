@@ -351,9 +351,15 @@ export function layoutGroup(m: CadModel, g: PanelGroup, faces?: RoofFace[]): Pla
   const sin = Math.sin(yaw);
   const pitchX = spec.width + spec.gapX;
   const pitchZ = spec.length + spec.gapZ;
-  let index = 0;
   const tilt = (PANEL_TILT_DEG * Math.PI) / 180;
   const rise = (spec.length / 2) * Math.sin(tilt);
+  const slope = Math.tan(tilt);
+  const single = (g.planeMode ?? "single") === "single";
+
+  // first pass: cell centres + supporting roof surface
+  type Cell = { index: number; x: number; z: number; y: number | null };
+  const cells: Cell[] = [];
+  let index = 0;
   for (let r = 0; r < g.rows; r++) {
     for (let c = 0; c < g.cols; c++) {
       const lx = (c - (g.cols - 1) / 2) * pitchX;
@@ -361,26 +367,33 @@ export function layoutGroup(m: CadModel, g: PanelGroup, faces?: RoofFace[]): Pla
       const x = g.x + lx * cos - lz * sin;
       const z = g.z + lx * sin + lz * cos;
       const surf = roofSurfaceAt(m, { x, z }, fs);
-      if (!surf) {
-        index++;
-        continue;
-      }
-      // panels always sit at a fixed 11° tilt facing south, on racking
-      out.push({
-        groupId: g.id,
-        index,
-        pos: [x, surf.y + PANEL_CLEARANCE + MOUNT_CLEARANCE + rise, z],
-        yaw: 0,
-        tilt,
-      });
-      index++;
+      cells.push({ index: index++, x, z, y: surf ? surf.y : null });
     }
+  }
+
+  // Panels always face south at a fixed 11° measured from ground level. In
+  // "single" mode every panel of the group lies in one common tilted plane
+  // (legs grow to clear the roof); in "surface" mode each panel hugs the
+  // surface below it.
+  const lift = PANEL_CLEARANCE + MOUNT_CLEARANCE + rise;
+  let planeRefY = -Infinity;
+  if (single) {
+    for (const cell of cells) {
+      if (cell.y == null) continue;
+      planeRefY = Math.max(planeRefY, cell.y + lift + (cell.z - g.z) * slope);
+    }
+  }
+  for (const cell of cells) {
+    if (cell.y == null) continue;
+    const y =
+      single && planeRefY > -Infinity ? planeRefY - (cell.z - g.z) * slope : cell.y + lift;
+    out.push({ groupId: g.id, index: cell.index, pos: [cell.x, y, cell.z], yaw: 0, tilt });
   }
   return out;
 }
 
-/** Rafter count for a system size: 3 kW → 4, 5 kW → 6 … (kW + 1, min 2). */
-export function rafterCount(kw: number): number {
+/** Support-leg count for a system size: 3 kW → 4, 5 kW → 6 … (kW + 1, min 2). */
+export function legCount(kw: number): number {
   return Math.max(2, Math.round(kw) + 1);
 }
 
