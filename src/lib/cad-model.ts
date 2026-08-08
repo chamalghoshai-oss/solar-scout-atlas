@@ -12,7 +12,7 @@ export type Ridge = { a: Pt; b: Pt; height: number };
 
 export type Prim = {
   id: string;
-  kind: "block" | "cylinder";
+  kind: "block" | "cylinder" | "model";
   x: number;
   z: number;
   /** placement base: on the roof surface or on the ground */
@@ -22,7 +22,12 @@ export type Prim = {
   d: number; // block depth (z, local)
   r: number; // cylinder radius
   h: number; // height
+  /** realistic building model key when kind === "model" */
+  asset?: BuildingAsset;
 };
+
+export type BuildingAsset = "venice" | "ichijoushi";
+export type TreeSpecies = "generic" | "leafy" | "coconut" | "coconut_palm" | "mango";
 
 export type Tree = {
   id: string;
@@ -32,6 +37,8 @@ export type Tree = {
   h: number;
   /** canopy radius */
   r: number;
+  /** 3D model used for rendering; "generic" is the simple stylised tree */
+  species?: TreeSpecies;
 };
 
 export type PanelSpec = {
@@ -57,6 +64,9 @@ export type PanelGroup = {
   x: number;
   z: number;
   rotY: number; // degrees, 0 = rows run north-south
+  /** "single" = whole array lies in one common plane, "surface" = each panel
+   *  follows the roof surface underneath it. */
+  planeMode?: "single" | "surface";
 };
 
 /** An additional building block. Sits on the main roof when it overlaps it,
@@ -66,6 +76,9 @@ export type Storey = {
   footprint: Pt[];
   wallHeight: number;
   parapetHeight: number;
+  roofType?: RoofType;
+  /** ridge apex height above the storey base when roofType === "sloped" */
+  ridgeHeight?: number;
 };
 
 /** Fixed panel tilt: always 11° facing south. */
