@@ -313,6 +313,35 @@ function PrimMesh({
   const baseY = primBaseY(model, prim);
   const drag = useDrag(baseY, onMove, setDragging);
   const color = selected ? "#f97316" : prim.kind === "cylinder" ? "#dcdfe1" : "#b6bcc0";
+  if (prim.kind === "model") {
+    return (
+      <group
+        position={[prim.x, baseY, prim.z]}
+        onPointerDown={(e) => {
+          onSelect();
+          drag.onPointerDown(e, [prim.x, prim.z]);
+        }}
+        onPointerMove={drag.onPointerMove}
+        onPointerUp={drag.onPointerUp}
+      >
+        <Suspense
+          fallback={
+            <mesh position={[0, prim.h / 2, 0]}>
+              <boxGeometry args={[prim.w, prim.h, prim.d]} />
+              <meshStandardMaterial color="#c3c8cb" />
+            </mesh>
+          }
+        >
+          <GltfModel
+            url={BUILDING_MODELS[prim.asset ?? "venice"]}
+            height={prim.h}
+            rotY={prim.rotY}
+            tint={selected ? "#f97316" : undefined}
+          />
+        </Suspense>
+      </group>
+    );
+  }
   return (
     <mesh
       position={[prim.x, baseY + prim.h / 2, prim.z]}
