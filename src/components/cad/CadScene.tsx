@@ -368,6 +368,7 @@ function PrimMesh({
 /** Extra building block (adjacent building or upper storey). */
 function StoreyMesh({ model, storey }: { model: CadModel; storey: Storey }) {
   const base = storeyBaseY(model, storey);
+  const sloped = (storey.roofType ?? "flat") === "sloped";
   const walls = useMemo(() => {
     if (storey.footprint.length < 3) return null;
     const g = new THREE.ExtrudeGeometry(shapeFromPts(storey.footprint), {
@@ -379,15 +380,32 @@ function StoreyMesh({ model, storey }: { model: CadModel; storey: Storey }) {
   }, [storey.footprint, storey.wallHeight]);
 
   const deck = useMemo(() => {
-    if (storey.footprint.length < 3) return null;
+    if (storey.footprint.length < 3 || sloped) return null;
     const g = new THREE.ShapeGeometry(shapeFromPts(storey.footprint));
     g.rotateX(-Math.PI / 2);
     g.translate(0, storey.wallHeight + 0.02, 0);
     return g;
-  }, [storey.footprint, storey.wallHeight]);
+  }, [storey.footprint, storey.wallHeight, sloped]);
+
+  const slopedGeo = useMemo(() => {
+    if (!sloped || storey.footprint.length < 3) return null;
+    const faces = gableFaces(storey.footprint, storeyTopY(model, storey), storeyRidge(model, storey));
+    const pos: number[] = [];
+    for (const f of faces) {
+      for (let i = 1; i < f.verts.length - 1; i++) {
+        pos.push(...f.verts[0], ...f.verts[i], ...f.verts[i + 1]);
+      }
+    }
+    if (!pos.length) return null;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.computeVertexNormals();
+    g.translate(0, -base, 0);
+    return g;
+  }, [sloped, storey, model, base]);
 
   const parapets = useMemo(() => {
-    if (storey.parapetHeight <= 0) return [];
+    if (storey.parapetHeight <= 0 || sloped) return [];
     const fp = storey.footprint;
     const out: Array<{ x: number; z: number; len: number; rot: number }> = [];
     for (let i = 0; i < fp.length; i++) {
@@ -403,7 +421,7 @@ function StoreyMesh({ model, storey }: { model: CadModel; storey: Storey }) {
       });
     }
     return out;
-  }, [storey.footprint, storey.parapetHeight]);
+  }, [storey.footprint, storey.parapetHeight, sloped]);
 
   if (!walls) return null;
   return (
@@ -414,6 +432,11 @@ function StoreyMesh({ model, storey }: { model: CadModel; storey: Storey }) {
       {deck && (
         <mesh geometry={deck} receiveShadow castShadow>
           <meshStandardMaterial color="#b9bcbe" roughness={0.95} side={THREE.DoubleSide} />
+        </mesh>
+      )}
+      {slopedGeo && (
+        <mesh geometry={slopedGeo} castShadow receiveShadow>
+          <meshStandardMaterial color="#c96a3f" roughness={0.95} side={THREE.DoubleSide} />
         </mesh>
       )}
       {parapets.map((p, i) => (
