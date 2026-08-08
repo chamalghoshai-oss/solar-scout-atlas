@@ -25,6 +25,7 @@ import {
 } from "@/lib/cad-model";
 import { FootprintCanvas, type DrawMode } from "@/components/cad/FootprintCanvas";
 import type { Selection } from "@/components/cad/CadScene";
+import { BUILDING_OPTIONS, TREE_OPTIONS } from "@/lib/cad-assets";
 
 const CadScene = lazy(() => import("@/components/cad/CadScene").then((m) => ({ default: m.CadScene })));
 
@@ -152,19 +153,20 @@ export function CadStudio({
     setDraw(null);
   }
 
-  function addPrim(kind: "block" | "cylinder") {
+  function addPrim(kind: "block" | "cylinder" | "model") {
     if (!hasRoof) return toast.error("Draw the roof outline first");
     const p = {
       id: uid(kind),
       kind,
       x: 0,
       z: 0,
-      base: "roof" as const,
+      base: (kind === "model" ? "ground" : "roof") as "roof" | "ground",
       rotY: 0,
-      w: 1.5,
-      d: 1.2,
+      w: kind === "model" ? 8 : 1.5,
+      d: kind === "model" ? 8 : 1.2,
       r: 0.5,
-      h: kind === "block" ? 1.2 : 1.6,
+      h: kind === "model" ? 7 : kind === "block" ? 1.2 : 1.6,
+      ...(kind === "model" ? { asset: "venice" as const } : {}),
     };
     setModel((m) => ({ ...m, prims: [...m.prims, p] }));
     setSelection({ kind: "prim", id: p.id });
@@ -172,14 +174,14 @@ export function CadStudio({
 
   function addTree() {
     const b = hasRoof ? polyBounds(model.footprint) : { maxX: 6, minZ: 0, minX: -6, maxZ: 0 };
-    const t = { id: uid("tree"), x: b.maxX + 4, z: 0, h: 8, r: 2.2 };
+    const t = { id: uid("tree"), x: b.maxX + 4, z: 0, h: 8, r: 2.2, species: "coconut" as const };
     setModel((m) => ({ ...m, trees: [...m.trees, t] }));
     setSelection({ kind: "tree", id: t.id });
   }
 
   function addGroup() {
     if (!hasRoof) return toast.error("Draw the roof outline first");
-    const g = { id: uid("grp"), cols: 4, rows: 3, x: 0, z: 0, rotY: 0 };
+    const g = { id: uid("grp"), cols: 4, rows: 3, x: 0, z: 0, rotY: 0, planeMode: "single" as const };
     setModel((m) => ({ ...m, groups: [...m.groups, g] }));
     setSelection({ kind: "group", id: g.id });
   }
