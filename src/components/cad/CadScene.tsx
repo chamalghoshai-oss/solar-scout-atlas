@@ -540,6 +540,35 @@ function TreeMesh({
   setDragging: (v: boolean) => void;
 }) {
   const drag = useDrag(0, onMove, setDragging);
+  const species = tree.species ?? "generic";
+  if (species !== "generic") {
+    return (
+      <group
+        position={[tree.x, 0, tree.z]}
+        onPointerDown={(e) => {
+          onSelect();
+          drag.onPointerDown(e, [tree.x, tree.z]);
+        }}
+        onPointerMove={drag.onPointerMove}
+        onPointerUp={drag.onPointerUp}
+      >
+        <Suspense
+          fallback={
+            <mesh position={[0, tree.h / 2, 0]}>
+              <cylinderGeometry args={[tree.r * 0.2, tree.r * 0.2, tree.h, 8]} />
+              <meshStandardMaterial color="#5d8a4a" />
+            </mesh>
+          }
+        >
+          <GltfModel
+            url={TREE_MODELS[species]}
+            height={tree.h}
+            tint={selected ? "#f97316" : undefined}
+          />
+        </Suspense>
+      </group>
+    );
+  }
   return (
     <group
       position={[tree.x, 0, tree.z]}
