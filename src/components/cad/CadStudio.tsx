@@ -293,6 +293,7 @@ export function CadStudio({
         <Suspense fallback={<SceneFallback />}>
           <CadScene
             model={model}
+            captureRef={captureRef}
             panels={panels}
             panelAccess={panelAccess}
             roofGrid={roofGrid}
@@ -360,6 +361,44 @@ export function CadStudio({
         <Stat label="System" value={`${kw.toFixed(2)} kW`} accent />
         <Stat label="Avg sun access" value={`${Math.round(avgAccess * 100)}%`} />
       </div>
+
+      {(onSaveDesign || reportMeta) && (
+        <div className="flex gap-2">
+          {onSaveDesign && (
+            <Button variant="outline" className="flex-1" onClick={saveDesign} disabled={savingDesign}>
+              {savingDesign ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              Save design
+            </Button>
+          )}
+          {reportMeta && (
+            <Button className="flex-1" onClick={openReport}>
+              <FileText className="mr-2 h-4 w-4" /> Generate report
+            </Button>
+          )}
+        </div>
+      )}
+
+      {reportMeta && (
+        <SolarReportDialog
+          open={reportOpen}
+          onOpenChange={setReportOpen}
+          data={{
+            title: reportMeta.title,
+            customer: reportMeta.customer,
+            phone: reportMeta.phone,
+            company: reportMeta.company,
+            lat,
+            lng,
+            kw,
+            panelCount: panels.length,
+            panelWatt: model.panel.watt,
+            avgAccess,
+            monthlyAccess,
+            shots,
+            photos: reportMeta.photos,
+          }}
+        />
+      )}
 
       {/* Modelling toolbar */}
       <div className="rounded-xl border border-border bg-card p-3">
