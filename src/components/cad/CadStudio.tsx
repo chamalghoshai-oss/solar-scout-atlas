@@ -1,10 +1,10 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { Box, Building2, Cylinder, Grid3X3, Loader2, Pause, Pencil, Play, Sun, Trees, Trash2 } from "lucide-react";
+import { Box, Building2, Cylinder, FileText, Grid3X3, Loader2, Pause, Pencil, Play, Save, Sun, Trees, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { dateFromDayHour, sunPosition, sunVector, MONTH_LABELS } from "@/lib/sun";
 import {
@@ -24,8 +24,9 @@ import {
   type Vec3,
 } from "@/lib/cad-model";
 import { FootprintCanvas, type DrawMode } from "@/components/cad/FootprintCanvas";
-import type { Selection } from "@/components/cad/CadScene";
+import type { CaptureFn, Selection } from "@/components/cad/CadScene";
 import { BUILDING_OPTIONS, TREE_OPTIONS } from "@/lib/cad-assets";
+import { SolarReportDialog, type ReportPhoto } from "@/components/cad/SolarReportDialog";
 
 const CadScene = lazy(() => import("@/components/cad/CadScene").then((m) => ({ default: m.CadScene })));
 
@@ -38,15 +39,31 @@ export function CadStudio({
   imageUrl,
   lat = 11.2588,
   lng = 75.7804,
+  initialModel,
+  onSaveDesign,
+  reportMeta,
 }: {
   imageUrl?: string | null;
   lat?: number;
   lng?: number;
+  initialModel?: CadModel | null;
+  onSaveDesign?: (model: CadModel, shots: { top: string | null; side: string | null }) => Promise<void> | void;
+  reportMeta?: {
+    title: string;
+    customer?: string | null;
+    phone?: string | null;
+    photos: ReportPhoto[];
+    company?: string;
+  };
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const [model, setModel] = useState<CadModel>(() => emptyModel());
+  const [model, setModel] = useState<CadModel>(() => initialModel ?? emptyModel());
+  const captureRef = useRef<CaptureFn | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [savingDesign, setSavingDesign] = useState(false);
+  const [shots, setShots] = useState<{ top: string | null; side: string | null }>({ top: null, side: null });
   const [siteWidthM, setSiteWidthM] = useState(30);
   const [draw, setDraw] = useState<DrawMode | null>("outline");
   const [outlineN, setOutlineN] = useState<NPt[]>([]);
