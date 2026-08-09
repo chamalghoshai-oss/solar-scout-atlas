@@ -1,10 +1,10 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { Box, Building2, Cylinder, Grid3X3, Loader2, Pause, Pencil, Play, Sun, Trees, Trash2 } from "lucide-react";
+import { Box, Building2, Cylinder, FileText, Grid3X3, Loader2, Pause, Pencil, Play, Save, Sun, Trees, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { dateFromDayHour, sunPosition, sunVector, MONTH_LABELS } from "@/lib/sun";
 import {
@@ -24,8 +24,9 @@ import {
   type Vec3,
 } from "@/lib/cad-model";
 import { FootprintCanvas, type DrawMode } from "@/components/cad/FootprintCanvas";
-import type { Selection } from "@/components/cad/CadScene";
+import type { CaptureFn, Selection } from "@/components/cad/CadScene";
 import { BUILDING_OPTIONS, TREE_OPTIONS } from "@/lib/cad-assets";
+import { SolarReportDialog, type ReportPhoto } from "@/components/cad/SolarReportDialog";
 
 const CadScene = lazy(() => import("@/components/cad/CadScene").then((m) => ({ default: m.CadScene })));
 
@@ -38,15 +39,31 @@ export function CadStudio({
   imageUrl,
   lat = 11.2588,
   lng = 75.7804,
+  initialModel,
+  onSaveDesign,
+  reportMeta,
 }: {
   imageUrl?: string | null;
   lat?: number;
   lng?: number;
+  initialModel?: CadModel | null;
+  onSaveDesign?: (model: CadModel, shots: { top: string | null; side: string | null }) => Promise<void> | void;
+  reportMeta?: {
+    title: string;
+    customer?: string | null;
+    phone?: string | null;
+    photos: ReportPhoto[];
+    company?: string;
+  };
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const [model, setModel] = useState<CadModel>(() => emptyModel());
+  const [model, setModel] = useState<CadModel>(() => initialModel ?? emptyModel());
+  const captureRef = useRef<CaptureFn | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [savingDesign, setSavingDesign] = useState(false);
+  const [shots, setShots] = useState<{ top: string | null; side: string | null }>({ top: null, side: null });
   const [siteWidthM, setSiteWidthM] = useState(30);
   const [draw, setDraw] = useState<DrawMode | null>("outline");
   const [outlineN, setOutlineN] = useState<NPt[]>([]);
@@ -93,6 +110,41 @@ export function CadStudio({
   const avgAccess = panelAccess.length
     ? panelAccess.reduce((a, b) => a + b, 0) / panelAccess.length
     : 0;
+
+  /** Per-month average sun access across the array (used by the report). */
+  const monthlyAccess = useMemo(() => {
+    if (!reportOpen || !panels.length) return Array(12).fill(1) as number[];
+    return Array.from({ length: 12 }, (_, mi) => {
+      const sub = samples.filter((s) => s.month === mi);
+      if (!sub.length) return 1;
+      const acc = panelShading(panels, casters, sub);
+      return acc.reduce((a, b) => a + b, 0) / acc.length;
+    });
+  }, [reportOpen, panels, casters, samples]);
+
+  function capture() {
+    const top = captureRef.current?.("top") ?? null;
+    const side = captureRef.current?.("side") ?? null;
+    const next = { top, side };
+    setShots(next);
+    return next;
+  }
+
+  async function saveDesign() {
+    if (!onSaveDesign) return;
+    setSavingDesign(true);
+    try {
+      await onSaveDesign(model, capture());
+    } finally {
+      setSavingDesign(false);
+    }
+  }
+
+  function openReport() {
+    if (!panels.length) return toast.error("Add a panel grid first");
+    capture();
+    setReportOpen(true);
+  }
 
   /* ---------- editing helpers ---------- */
   function patch(p: Partial<CadModel>) {
@@ -241,6 +293,7 @@ export function CadStudio({
         <Suspense fallback={<SceneFallback />}>
           <CadScene
             model={model}
+            captureRef={captureRef}
             panels={panels}
             panelAccess={panelAccess}
             roofGrid={roofGrid}
@@ -308,6 +361,44 @@ export function CadStudio({
         <Stat label="System" value={`${kw.toFixed(2)} kW`} accent />
         <Stat label="Avg sun access" value={`${Math.round(avgAccess * 100)}%`} />
       </div>
+
+      {(onSaveDesign || reportMeta) && (
+        <div className="flex gap-2">
+          {onSaveDesign && (
+            <Button variant="outline" className="flex-1" onClick={saveDesign} disabled={savingDesign}>
+              {savingDesign ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              Save design
+            </Button>
+          )}
+          {reportMeta && (
+            <Button className="flex-1" onClick={openReport}>
+              <FileText className="mr-2 h-4 w-4" /> Generate report
+            </Button>
+          )}
+        </div>
+      )}
+
+      {reportMeta && (
+        <SolarReportDialog
+          open={reportOpen}
+          onOpenChange={setReportOpen}
+          data={{
+            title: reportMeta.title,
+            customer: reportMeta.customer,
+            phone: reportMeta.phone,
+            company: reportMeta.company,
+            lat,
+            lng,
+            kw,
+            panelCount: panels.length,
+            panelWatt: model.panel.watt,
+            avgAccess,
+            monthlyAccess,
+            shots,
+            photos: reportMeta.photos,
+          }}
+        />
+      )}
 
       {/* Modelling toolbar */}
       <div className="rounded-xl border border-border bg-card p-3">

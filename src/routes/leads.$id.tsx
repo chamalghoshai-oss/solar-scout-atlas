@@ -15,6 +15,16 @@ import { getSignedUrls, uploadPhoto, type PhotoMeta } from "@/lib/photos";
 import { toast } from "sonner";
 import { RoofPlanner, type RoofPlan } from "@/components/RoofPlanner";
 import { GeoCamera } from "@/components/GeoCamera";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { CadStudio } from "@/components/cad/CadStudio";
+import type { CadModel } from "@/lib/cad-model";
+
+type SavedDesign = {
+  model: CadModel;
+  shots: { top: string | null; side: string | null };
+  kw: number;
+  savedAt: string;
+};
 
 export const Route = createFileRoute("/leads/$id")({
   head: () => ({
@@ -36,6 +46,7 @@ type Lead = {
   visited: boolean;
   photos: PhotoMeta[];
   roof_plan: RoofPlan | null;
+  cad_design: SavedDesign | null;
   created_at: string;
 };
 
@@ -51,6 +62,7 @@ function LeadDetail() {
   const [uploading, setUploading] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [plannerOpen, setPlannerOpen] = useState(false);
+  const [cadOpen, setCadOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -301,6 +313,37 @@ function LeadDetail() {
           )}
         </div>
 
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <Label className="flex items-center gap-1"><Boxes className="h-3.5 w-3.5 text-primary" /> 3D design & report</Label>
+            <Button size="sm" className="h-7 px-2 text-xs" onClick={() => setCadOpen(true)}>
+              {lead.cad_design ? "Open design" : "Build 3D design"}
+            </Button>
+          </div>
+          {lead.cad_design ? (
+            <div className="rounded-md border border-border bg-card p-3">
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <Mini label="Saved system" value={`${lead.cad_design.kw.toFixed(2)} kW`} accent />
+                <Mini label="Saved on" value={new Date(lead.cad_design.savedAt).toLocaleDateString()} />
+              </div>
+              {(lead.cad_design.shots?.top || lead.cad_design.shots?.side) && (
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {lead.cad_design.shots.top && (
+                    <img src={lead.cad_design.shots.top} alt="3D top view" className="rounded border" />
+                  )}
+                  {lead.cad_design.shots.side && (
+                    <img src={lead.cad_design.shots.side} alt="3D side view" className="rounded border" />
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="rounded-md border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
+              Model the roof in 3D, run the shadow study and generate a full production + ROI report.
+            </p>
+          )}
+        </div>
+
         <div className="flex gap-2 pt-2">
           <Button variant="outline" className="flex-1" onClick={remove}>
             <Trash2 className="mr-2 h-4 w-4" /> Delete
@@ -325,6 +368,48 @@ function LeadDetail() {
         fallbackLatLng={{ lat: lead.lat, lng: lead.lng }}
         onCaptured={onGeoCaptured}
       />
+
+      <Dialog open={cadOpen} onOpenChange={setCadOpen}>
+        <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto p-3 sm:p-5">
+          <DialogHeader>
+            <DialogTitle className="text-base">3D solar design — {lead.name || "Lead"}</DialogTitle>
+          </DialogHeader>
+          <CadStudio
+            lat={lead.lat}
+            lng={lead.lng}
+            imageUrl={lead.photos?.[0] ? signedUrls[lead.photos[0].path] : null}
+            initialModel={lead.cad_design?.model ?? null}
+            reportMeta={{
+              title: lead.name || `Lead ${lead.id.slice(0, 8)}`,
+              customer: lead.name,
+              phone: lead.phone,
+              company: settings?.company_name,
+              photos: (lead.photos ?? [])
+                .filter((p) => signedUrls[p.path])
+                .map((p) => ({ url: signedUrls[p.path], lat: p.lat, lng: p.lng })),
+            }}
+            onSaveDesign={async (model, shots) => {
+              const design: SavedDesign = {
+                model,
+                shots,
+                kw:
+                  model.groups.reduce((a, g) => a + g.cols * g.rows, 0) * model.panel.watt / 1000,
+                savedAt: new Date().toISOString(),
+              };
+              const { error } = await supabase
+                .from("leads")
+                .update({ cad_design: design as unknown as never })
+                .eq("id", lead.id);
+              if (error) {
+                toast.error(error.message);
+                return;
+              }
+              setLead({ ...lead, cad_design: design });
+              toast.success("3D design saved to this lead");
+            }}
+          />
+        </DialogContent>
+      </Dialog>
 
       <RoofPlanner
         open={plannerOpen}

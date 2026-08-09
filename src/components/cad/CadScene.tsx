@@ -28,6 +28,8 @@ import { BUILDING_MODELS, TREE_MODELS } from "@/lib/cad-assets";
 
 export type Selection = { kind: "prim" | "tree" | "group"; id: string } | null;
 
+export type CaptureFn = (view: "top" | "side") => string | null;
+
 /* ---------------- textures ---------------- */
 
 /** Roof tile checks sized to 1 ft x 0.75 ft. */
@@ -705,6 +707,37 @@ function Controls({ enabled, target }: { enabled: boolean; target: [number, numb
 
 /* ---------------- main ---------------- */
 
+/** Renders the scene from a fixed top / side camera and returns a JPEG data URL. */
+function Capturer({
+  captureRef,
+  span,
+  top,
+}: {
+  captureRef: { current: CaptureFn | null };
+  span: number;
+  top: number;
+}) {
+  const { gl, scene, size } = useThree();
+  captureRef.current = (view) => {
+    const aspect = size.width / Math.max(1, size.height);
+    const cam = new THREE.PerspectiveCamera(40, aspect, 0.5, 2000);
+    if (view === "top") {
+      cam.position.set(0.001, top + span * 1.9, 0.001);
+    } else {
+      cam.position.set(0, top + span * 0.35, span * 1.5);
+    }
+    cam.lookAt(0, top * 0.5, 0);
+    cam.updateProjectionMatrix();
+    try {
+      gl.render(scene, cam);
+      return gl.domElement.toDataURL("image/jpeg", 0.85);
+    } catch {
+      return null;
+    }
+  };
+  return null;
+}
+
 export function CadScene({
   model,
   panels,
@@ -719,6 +752,7 @@ export function CadScene({
   onMovePrim,
   onMoveTree,
   onMoveGroup,
+  captureRef,
 }: {
   model: CadModel;
   panels: PlacedPanel[];
@@ -733,6 +767,7 @@ export function CadScene({
   onMovePrim: (id: string, x: number, z: number) => void;
   onMoveTree: (id: string, x: number, z: number) => void;
   onMoveGroup: (id: string, x: number, z: number) => void;
+  captureRef?: { current: CaptureFn | null };
 }) {
   const [dragging, setDragging] = useState(false);
   const heat = useMemo(
@@ -765,10 +800,12 @@ export function CadScene({
       <Canvas
         shadows
         dpr={[1, 2]}
+        gl={{ preserveDrawingBuffer: true }}
         camera={{ position: [span * 0.9, top + span * 0.8, span * 1.1], fov: 40, far: 2000 }}
         onPointerMissed={() => onSelect(null)}
       >
         <Suspense fallback={null}>
+          {captureRef && <Capturer captureRef={captureRef} span={span} top={top} />}
           <Sky sunPosition={sunVec} turbidity={4} rayleigh={dayLight ? 0.7 : 5} mieCoefficient={0.008} />
           <ambientLight intensity={dayLight ? 0.5 : 0.15} />
           <hemisphereLight args={["#eaf3ff", "#7fa05f", dayLight ? 0.6 : 0.2]} />

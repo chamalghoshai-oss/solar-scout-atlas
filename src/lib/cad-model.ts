@@ -375,7 +375,9 @@ export function layoutGroup(m: CadModel, g: PanelGroup, faces?: RoofFace[]): Pla
   // "single" mode every panel of the group lies in one common tilted plane
   // (legs grow to clear the roof); in "surface" mode each panel hugs the
   // surface below it.
-  const lift = PANEL_CLEARANCE + MOUNT_CLEARANCE + rise;
+  // The low edge of every module must clear the 1 sq ft concrete footings that
+  // sit under the support legs, so the footings are never visible above a panel.
+  const lift = PANEL_CLEARANCE + FOOTING_M + MOUNT_CLEARANCE + rise;
   let planeRefY = -Infinity;
   if (single) {
     for (const cell of cells) {
