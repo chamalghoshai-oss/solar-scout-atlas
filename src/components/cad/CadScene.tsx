@@ -28,6 +28,8 @@ import { BUILDING_MODELS, TREE_MODELS } from "@/lib/cad-assets";
 
 export type Selection = { kind: "prim" | "tree" | "group"; id: string } | null;
 
+export type CaptureFn = (view: "top" | "side") => string | null;
+
 /* ---------------- textures ---------------- */
 
 /** Roof tile checks sized to 1 ft x 0.75 ft. */
