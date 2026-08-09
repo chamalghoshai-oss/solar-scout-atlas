@@ -118,6 +118,7 @@ export type Database = {
       }
       leads: {
         Row: {
+          cad_design: Json | null
           created_at: string
           device_id: string
           id: string
@@ -136,6 +137,7 @@ export type Database = {
           visited: boolean
         }
         Insert: {
+          cad_design?: Json | null
           created_at?: string
           device_id: string
           id?: string
@@ -154,6 +156,7 @@ export type Database = {
           visited?: boolean
         }
         Update: {
+          cad_design?: Json | null
           created_at?: string
           device_id?: string
           id?: string
