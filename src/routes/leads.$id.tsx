@@ -15,6 +15,16 @@ import { getSignedUrls, uploadPhoto, type PhotoMeta } from "@/lib/photos";
 import { toast } from "sonner";
 import { RoofPlanner, type RoofPlan } from "@/components/RoofPlanner";
 import { GeoCamera } from "@/components/GeoCamera";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { CadStudio } from "@/components/cad/CadStudio";
+import type { CadModel } from "@/lib/cad-model";
+
+type SavedDesign = {
+  model: CadModel;
+  shots: { top: string | null; side: string | null };
+  kw: number;
+  savedAt: string;
+};
 
 export const Route = createFileRoute("/leads/$id")({
   head: () => ({
@@ -36,6 +46,7 @@ type Lead = {
   visited: boolean;
   photos: PhotoMeta[];
   roof_plan: RoofPlan | null;
+  cad_design: SavedDesign | null;
   created_at: string;
 };
 
@@ -51,6 +62,7 @@ function LeadDetail() {
   const [uploading, setUploading] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [plannerOpen, setPlannerOpen] = useState(false);
+  const [cadOpen, setCadOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
