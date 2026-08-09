@@ -369,6 +369,45 @@ function LeadDetail() {
         onCaptured={onGeoCaptured}
       />
 
+      <Dialog open={cadOpen} onOpenChange={setCadOpen}>
+        <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto p-3 sm:p-5">
+          <DialogHeader>
+            <DialogTitle className="text-base">3D solar design — {lead.name || "Lead"}</DialogTitle>
+          </DialogHeader>
+          <CadStudio
+            lat={lead.lat}
+            lng={lead.lng}
+            imageUrl={lead.photos?.[0] ? signedUrls[lead.photos[0].path] : null}
+            initialModel={lead.cad_design?.model ?? null}
+            reportMeta={{
+              title: lead.name || `Lead ${lead.id.slice(0, 8)}`,
+              customer: lead.name,
+              phone: lead.phone,
+              company: settings?.company_name,
+              photos: (lead.photos ?? [])
+                .filter((p) => signedUrls[p.path])
+                .map((p) => ({ url: signedUrls[p.path], lat: p.lat, lng: p.lng })),
+            }}
+            onSaveDesign={async (model, shots) => {
+              const design: SavedDesign = {
+                model,
+                shots,
+                kw:
+                  model.groups.reduce((a, g) => a + g.cols * g.rows, 0) * model.panel.watt / 1000,
+                savedAt: new Date().toISOString(),
+              };
+              const { error } = await supabase
+                .from("leads")
+                .update({ cad_design: design as unknown as never })
+                .eq("id", lead.id);
+              if (error) return toast.error(error.message);
+              setLead({ ...lead, cad_design: design });
+              toast.success("3D design saved to this lead");
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
       <RoofPlanner
         open={plannerOpen}
         onOpenChange={setPlannerOpen}
