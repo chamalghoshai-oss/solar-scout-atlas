@@ -707,6 +707,37 @@ function Controls({ enabled, target }: { enabled: boolean; target: [number, numb
 
 /* ---------------- main ---------------- */
 
+/** Renders the scene from a fixed top / side camera and returns a JPEG data URL. */
+function Capturer({
+  captureRef,
+  span,
+  top,
+}: {
+  captureRef: { current: CaptureFn | null };
+  span: number;
+  top: number;
+}) {
+  const { gl, scene, size } = useThree();
+  captureRef.current = (view) => {
+    const aspect = size.width / Math.max(1, size.height);
+    const cam = new THREE.PerspectiveCamera(40, aspect, 0.5, 2000);
+    if (view === "top") {
+      cam.position.set(0.001, top + span * 1.9, 0.001);
+    } else {
+      cam.position.set(0, top + span * 0.35, span * 1.5);
+    }
+    cam.lookAt(0, top * 0.5, 0);
+    cam.updateProjectionMatrix();
+    try {
+      gl.render(scene, cam);
+      return gl.domElement.toDataURL("image/jpeg", 0.85);
+    } catch {
+      return null;
+    }
+  };
+  return null;
+}
+
 export function CadScene({
   model,
   panels,
