@@ -111,6 +111,41 @@ export function CadStudio({
     ? panelAccess.reduce((a, b) => a + b, 0) / panelAccess.length
     : 0;
 
+  /** Per-month average sun access across the array (used by the report). */
+  const monthlyAccess = useMemo(() => {
+    if (!reportOpen || !panels.length) return Array(12).fill(1) as number[];
+    return Array.from({ length: 12 }, (_, mi) => {
+      const sub = samples.filter((s) => s.month === mi);
+      if (!sub.length) return 1;
+      const acc = panelShading(panels, casters, sub);
+      return acc.reduce((a, b) => a + b, 0) / acc.length;
+    });
+  }, [reportOpen, panels, casters, samples]);
+
+  function capture() {
+    const top = captureRef.current?.("top") ?? null;
+    const side = captureRef.current?.("side") ?? null;
+    const next = { top, side };
+    setShots(next);
+    return next;
+  }
+
+  async function saveDesign() {
+    if (!onSaveDesign) return;
+    setSavingDesign(true);
+    try {
+      await onSaveDesign(model, capture());
+    } finally {
+      setSavingDesign(false);
+    }
+  }
+
+  function openReport() {
+    if (!panels.length) return toast.error("Add a panel grid first");
+    capture();
+    setReportOpen(true);
+  }
+
   /* ---------- editing helpers ---------- */
   function patch(p: Partial<CadModel>) {
     setModel((m) => ({ ...m, ...p }));
