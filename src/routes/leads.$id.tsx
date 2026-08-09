@@ -400,7 +400,10 @@ function LeadDetail() {
                 .from("leads")
                 .update({ cad_design: design as unknown as never })
                 .eq("id", lead.id);
-              if (error) return toast.error(error.message);
+              if (error) {
+                toast.error(error.message);
+                return;
+              }
               setLead({ ...lead, cad_design: design });
               toast.success("3D design saved to this lead");
             }}
