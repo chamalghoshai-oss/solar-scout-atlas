@@ -313,6 +313,37 @@ function LeadDetail() {
           )}
         </div>
 
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <Label className="flex items-center gap-1"><Boxes className="h-3.5 w-3.5 text-primary" /> 3D design & report</Label>
+            <Button size="sm" className="h-7 px-2 text-xs" onClick={() => setCadOpen(true)}>
+              {lead.cad_design ? "Open design" : "Build 3D design"}
+            </Button>
+          </div>
+          {lead.cad_design ? (
+            <div className="rounded-md border border-border bg-card p-3">
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <Mini label="Saved system" value={`${lead.cad_design.kw.toFixed(2)} kW`} accent />
+                <Mini label="Saved on" value={new Date(lead.cad_design.savedAt).toLocaleDateString()} />
+              </div>
+              {(lead.cad_design.shots?.top || lead.cad_design.shots?.side) && (
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {lead.cad_design.shots.top && (
+                    <img src={lead.cad_design.shots.top} alt="3D top view" className="rounded border" />
+                  )}
+                  {lead.cad_design.shots.side && (
+                    <img src={lead.cad_design.shots.side} alt="3D side view" className="rounded border" />
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="rounded-md border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
+              Model the roof in 3D, run the shadow study and generate a full production + ROI report.
+            </p>
+          )}
+        </div>
+
         <div className="flex gap-2 pt-2">
           <Button variant="outline" className="flex-1" onClick={remove}>
             <Trash2 className="mr-2 h-4 w-4" /> Delete
