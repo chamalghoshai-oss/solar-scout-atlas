@@ -233,7 +233,17 @@ export function CadStudio({
 
   function addGroup() {
     if (!hasRoof) return toast.error("Draw the roof outline first");
-    const g = { id: uid("grp"), cols: 4, rows: 3, x: 0, z: 0, rotY: 0, planeMode: "single" as const };
+    const g = {
+      id: uid("grp"),
+      cols: 3,
+      rows: 2,
+      x: 0,
+      z: 0,
+      rotY: 0,
+      planeMode: "single" as const,
+      tiltDeg: 11,
+      mountHeight: 0,
+    };
     setModel((m) => ({ ...m, groups: [...m.groups, g] }));
     setSelection({ kind: "group", id: g.id });
   }
@@ -362,31 +372,26 @@ export function CadStudio({
         <Stat label="Avg sun access" value={`${Math.round(avgAccess * 100)}%`} />
       </div>
 
-      {(onSaveDesign || reportMeta) && (
-        <div className="flex gap-2">
+      <div className="flex gap-2">
           {onSaveDesign && (
             <Button variant="outline" className="flex-1" onClick={saveDesign} disabled={savingDesign}>
               {savingDesign ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               Save design
             </Button>
           )}
-          {reportMeta && (
-            <Button className="flex-1" onClick={openReport}>
-              <FileText className="mr-2 h-4 w-4" /> Generate report
-            </Button>
-          )}
-        </div>
-      )}
+        <Button className="flex-1" onClick={openReport}>
+          <FileText className="mr-2 h-4 w-4" /> Generate report
+        </Button>
+      </div>
 
-      {reportMeta && (
-        <SolarReportDialog
+      <SolarReportDialog
           open={reportOpen}
           onOpenChange={setReportOpen}
           data={{
-            title: reportMeta.title,
-            customer: reportMeta.customer,
-            phone: reportMeta.phone,
-            company: reportMeta.company,
+            title: reportMeta?.title ?? "Rooftop solar design",
+            customer: reportMeta?.customer,
+            phone: reportMeta?.phone,
+            company: reportMeta?.company,
             lat,
             lng,
             kw,
@@ -395,10 +400,9 @@ export function CadStudio({
             avgAccess,
             monthlyAccess,
             shots,
-            photos: reportMeta.photos,
+            photos: reportMeta?.photos ?? [],
           }}
-        />
-      )}
+      />
 
       {/* Modelling toolbar */}
       <div className="rounded-xl border border-border bg-card p-3">
