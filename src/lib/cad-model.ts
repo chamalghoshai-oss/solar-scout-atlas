@@ -359,8 +359,11 @@ export function layoutGroup(m: CadModel, g: PanelGroup, faces?: RoofFace[]): Pla
   const cos = Math.cos(yaw);
   const sin = Math.sin(yaw);
   const pitchX = spec.width + spec.gapX;
-  const pitchZ = spec.length + spec.gapZ;
-  const tilt = (PANEL_TILT_DEG * Math.PI) / 180;
+  const tiltDeg = groupTilt(g);
+  const tilt = (tiltDeg * Math.PI) / 180;
+  // Rows are pitched by the panel's HORIZONTAL projection, so tilting never
+  // opens a gap between adjacent modules — they stay edge to edge.
+  const pitchZ = spec.length * Math.cos(tilt) + spec.gapZ;
   const rise = (spec.length / 2) * Math.sin(tilt);
   const slope = Math.tan(tilt);
   const single = (g.planeMode ?? "single") === "single";
@@ -386,7 +389,8 @@ export function layoutGroup(m: CadModel, g: PanelGroup, faces?: RoofFace[]): Pla
   // surface below it.
   // The low edge of every module must clear the 1 sq ft concrete footings that
   // sit under the support legs, so the footings are never visible above a panel.
-  const lift = PANEL_CLEARANCE + FOOTING_M + MOUNT_CLEARANCE + rise;
+  const lift =
+    PANEL_CLEARANCE + FOOTING_M + MOUNT_CLEARANCE + rise + Math.max(0, g.mountHeight ?? 0);
   let planeRefY = -Infinity;
   if (single) {
     for (const cell of cells) {
@@ -403,9 +407,10 @@ export function layoutGroup(m: CadModel, g: PanelGroup, faces?: RoofFace[]): Pla
   return out;
 }
 
-/** Support-leg count for a system size: 3 kW → 4, 5 kW → 6 … (kW + 1, min 2). */
+/** Legs per side: 3 kW → 2 (4 in total), 5 kW → 3, then +1 per extra 2 kW. */
 export function legCount(kw: number): number {
-  return Math.max(2, Math.round(kw) + 1);
+  if (kw <= 3) return 2;
+  return 2 + Math.ceil((kw - 3) / 2);
 }
 
 export function allPanels(m: CadModel, faces?: RoofFace[]): PlacedPanel[] {
