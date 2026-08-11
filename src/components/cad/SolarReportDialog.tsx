@@ -266,6 +266,7 @@ function buildReportHtml(o: {
   costPerKw: number;
   subsidy: number;
   exportRate: number;
+  loan: ReturnType<typeof computeLoan> | null;
 }) {
   const { data, roi, rows } = o;
   const period = o.cycle === "monthly" ? "month" : "2 months";
@@ -387,6 +388,24 @@ ${photoCards ? `<h2>2. Geo-tagged site photos</h2><div class="grid">${photoCards
 </tbody></table>
 <table style="margin-top:10px"><thead><tr><th>Year</th><th>Generation (kWh)</th><th>Saving</th><th>Cumulative</th></tr></thead><tbody>${roiRows}</tbody></table>
 <p class="note">Assumes 5% annual tariff escalation, 0.7% annual module degradation and current KSEB domestic slabs. Actual output varies with weather, soiling and maintenance.</p>
+
+${
+  o.loan
+    ? `<h2>${photoCards ? 7 : 6}. Loan / EMI plan</h2>
+<table><tbody>
+<tr><th>Loan amount</th><td>${inr(o.loan.principal)} (max ₹2,00,000)</td></tr>
+<tr><th>Interest rate</th><td>${(o.loan.rate * 100).toFixed(2)}% per annum (reducing balance)</td></tr>
+<tr><th>Tenure</th><td>${o.loan.years} years (${o.loan.years * 12} EMIs, max 10 years)</td></tr>
+<tr><th>Monthly EMI</th><td><b>${inr(o.loan.emi)}</b></td></tr>
+<tr><th>Total interest</th><td>${inr(o.loan.totalInterest)}</td></tr>
+<tr><th>Total repayment</th><td>${inr(o.loan.totalPaid)}</td></tr>
+<tr><th>Down payment</th><td>${inr(o.loan.downPayment)}</td></tr>
+<tr><th>Average monthly saving (year 1)</th><td class="${Math.round(roi.firstYearSavings / 12) >= o.loan.emi ? "pos" : "neg"}">${inr(roi.firstYearSavings / 12)}</td></tr>
+<tr><th>Net monthly outflow during tenure</th><td>${inr(Math.max(0, o.loan.emi - roi.firstYearSavings / 12))}</td></tr>
+</tbody></table>
+<p class="note">EMI is calculated on a reducing-balance basis. Savings rise about 5% a year with tariff escalation, so the plan typically turns cash-positive well before the tenure ends; after repayment the full saving is retained.</p>`
+    : ""
+}
 
 <button class="btn" onclick="window.print()">Print / Save PDF</button>
 </div></body></html>`;
