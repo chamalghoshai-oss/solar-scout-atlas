@@ -178,3 +178,46 @@ export function computeRoi(i: RoiInput): RoiResult {
 export function inr(n: number): string {
   return `₹${Math.round(n).toLocaleString("en-IN")}`;
 }
+
+/* ------------------------------------------------------------------ *
+ * Rooftop solar loan (subsidised): 5.75% p.a., up to ₹2,00,000,
+ * tenure up to 10 years.
+ * ------------------------------------------------------------------ */
+
+export const LOAN_RATE = 0.0575;
+export const LOAN_MAX_PRINCIPAL = 200000;
+export const LOAN_MAX_YEARS = 10;
+
+export type LoanResult = {
+  principal: number;
+  years: number;
+  rate: number;
+  emi: number;
+  totalPaid: number;
+  totalInterest: number;
+  downPayment: number;
+};
+
+export function computeLoan(opts: {
+  principal: number;
+  years: number;
+  netCapex: number;
+  rate?: number;
+}): LoanResult {
+  const rate = opts.rate ?? LOAN_RATE;
+  const principal = Math.max(0, Math.min(opts.principal, LOAN_MAX_PRINCIPAL, opts.netCapex));
+  const years = Math.max(1, Math.min(opts.years, LOAN_MAX_YEARS));
+  const n = years * 12;
+  const r = rate / 12;
+  const emi = principal <= 0 ? 0 : (principal * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+  const totalPaid = emi * n;
+  return {
+    principal,
+    years,
+    rate,
+    emi: Math.round(emi),
+    totalPaid: Math.round(totalPaid),
+    totalInterest: Math.round(totalPaid - principal),
+    downPayment: Math.max(0, Math.round(opts.netCapex - principal)),
+  };
+}
