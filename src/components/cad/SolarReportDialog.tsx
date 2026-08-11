@@ -8,6 +8,10 @@ import { toast } from "sonner";
 import {
   billFromUnits,
   computeRoi,
+  computeLoan,
+  LOAN_RATE,
+  LOAN_MAX_PRINCIPAL,
+  LOAN_MAX_YEARS,
   effectiveRate,
   inr,
   marginalRate,
@@ -52,6 +56,9 @@ export function SolarReportDialog({
   const [costPerKw, setCostPerKw] = useState(55000);
   const [subsidy, setSubsidy] = useState(0);
   const [exportRate, setExportRate] = useState(3);
+  const [loanOn, setLoanOn] = useState(true);
+  const [loanAmount, setLoanAmount] = useState(200000);
+  const [loanYears, setLoanYears] = useState(5);
 
   const cycleUnits = mode === "units" ? units : unitsFromBill(amount, cycle);
   const monthlyUnits = cycle === "monthly" ? cycleUnits : cycleUnits / 2;
@@ -72,6 +79,11 @@ export function SolarReportDialog({
     [data.kw, annualUnits, monthlyUnits, costPerKw, subsidy, exportRate],
   );
 
+  const loan = useMemo(
+    () => computeLoan({ principal: loanAmount, years: loanYears, netCapex: roi.netCapex }),
+    [loanAmount, loanYears, roi.netCapex],
+  );
+
   function generate() {
     if (data.kw <= 0) {
       toast.error("Place panels in the 3D design first");
@@ -89,6 +101,7 @@ export function SolarReportDialog({
       costPerKw,
       subsidy,
       exportRate,
+      loan: loanOn ? loan : null,
     });
     const w = window.open("", "_blank");
     if (w) {
@@ -165,6 +178,32 @@ export function SolarReportDialog({
             <Num label="System cost (₹/kW)" value={costPerKw} onChange={setCostPerKw} />
             <Num label="Subsidy (₹)" value={subsidy} onChange={setSubsidy} />
             <Num label="Export rate (₹/unit)" value={exportRate} onChange={setExportRate} />
+          </div>
+
+          <div className="rounded-md border border-border p-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] font-semibold">Include loan plan</Label>
+              <button
+                type="button"
+                onClick={() => setLoanOn((v) => !v)}
+                className={`rounded-full px-3 py-1 text-[11px] ${loanOn ? "bg-primary text-primary-foreground" : "border border-border"}`}
+              >
+                {loanOn ? "On" : "Off"}
+              </button>
+            </div>
+            {loanOn && (
+              <>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <Num label={`Loan amount (₹, max ${LOAN_MAX_PRINCIPAL.toLocaleString("en-IN")})`} value={loanAmount} onChange={setLoanAmount} />
+                  <Num label={`Tenure (years, max ${LOAN_MAX_YEARS})`} value={loanYears} onChange={setLoanYears} />
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {(LOAN_RATE * 100).toFixed(2)}% p.a. · EMI <b>{inr(loan.emi)}</b>/month for {loan.years} years ·
+                  interest {inr(loan.totalInterest)}
+                  {loan.downPayment > 0 ? ` · down payment ${inr(loan.downPayment)}` : ""}
+                </p>
+              </>
+            )}
           </div>
 
           <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
