@@ -67,6 +67,10 @@ export type PanelGroup = {
   /** "single" = whole array lies in one common plane, "surface" = each panel
    *  follows the roof surface underneath it. */
   planeMode?: "single" | "surface";
+  /** panel tilt in degrees from horizontal (south facing). Defaults to 11°. */
+  tiltDeg?: number;
+  /** extra structure height (m) lifting the whole array above the roof. */
+  mountHeight?: number;
 };
 
 /** An additional building block. Sits on the main roof when it overlaps it,
@@ -83,6 +87,11 @@ export type Storey = {
 
 /** Fixed panel tilt: always 11° facing south. */
 export const PANEL_TILT_DEG = 11;
+/** Tilt actually used by a group (structure tilt is adjustable). */
+export function groupTilt(g: PanelGroup): number {
+  const t = g.tiltDeg;
+  return Math.max(0, Math.min(45, Number.isFinite(t as number) ? (t as number) : PANEL_TILT_DEG));
+}
 /** Concrete footing cube edge: 1 sq ft. */
 export const FOOTING_M = 0.3048;
 
