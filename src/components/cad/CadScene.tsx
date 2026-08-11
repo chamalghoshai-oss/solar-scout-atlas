@@ -460,10 +460,10 @@ function StoreyMesh({ model, storey }: { model: CadModel; storey: Storey }) {
 /** Vertical support columns (legs) + 1 sq ft concrete footings under a panel group. */
 function Legs({ model, group, panels }: { model: CadModel; group: PanelGroup; panels: PlacedPanel[] }) {
   const spec = model.panel;
-  const tilt = (PANEL_TILT_DEG * Math.PI) / 180;
+  const tilt = (groupTilt(group) * Math.PI) / 180;
   const slope = Math.tan(tilt);
   const extentX = group.cols * (spec.width + spec.gapX);
-  const extentZ = group.rows * (spec.length + spec.gapZ);
+  const extentZ = group.rows * (spec.length * Math.cos(tilt) + spec.gapZ);
   const kw = (group.cols * group.rows * spec.watt) / 1000;
   const n = legCount(kw);
   if (!panels.length) return null;
