@@ -6,6 +6,7 @@ import {
   buildRoofFaces,
   FOOTING_M,
   gableFaces,
+  groupTilt,
   legCount,
   MOUNT_CLEARANCE,
   PANEL_TILT_DEG,
