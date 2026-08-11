@@ -233,7 +233,17 @@ export function CadStudio({
 
   function addGroup() {
     if (!hasRoof) return toast.error("Draw the roof outline first");
-    const g = { id: uid("grp"), cols: 4, rows: 3, x: 0, z: 0, rotY: 0, planeMode: "single" as const };
+    const g = {
+      id: uid("grp"),
+      cols: 3,
+      rows: 2,
+      x: 0,
+      z: 0,
+      rotY: 0,
+      planeMode: "single" as const,
+      tiltDeg: 11,
+      mountHeight: 0,
+    };
     setModel((m) => ({ ...m, groups: [...m.groups, g] }));
     setSelection({ kind: "group", id: g.id });
   }
@@ -362,31 +372,26 @@ export function CadStudio({
         <Stat label="Avg sun access" value={`${Math.round(avgAccess * 100)}%`} />
       </div>
 
-      {(onSaveDesign || reportMeta) && (
-        <div className="flex gap-2">
+      <div className="flex gap-2">
           {onSaveDesign && (
             <Button variant="outline" className="flex-1" onClick={saveDesign} disabled={savingDesign}>
               {savingDesign ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               Save design
             </Button>
           )}
-          {reportMeta && (
-            <Button className="flex-1" onClick={openReport}>
-              <FileText className="mr-2 h-4 w-4" /> Generate report
-            </Button>
-          )}
-        </div>
-      )}
+        <Button className="flex-1" onClick={openReport}>
+          <FileText className="mr-2 h-4 w-4" /> Generate report
+        </Button>
+      </div>
 
-      {reportMeta && (
-        <SolarReportDialog
+      <SolarReportDialog
           open={reportOpen}
           onOpenChange={setReportOpen}
           data={{
-            title: reportMeta.title,
-            customer: reportMeta.customer,
-            phone: reportMeta.phone,
-            company: reportMeta.company,
+            title: reportMeta?.title ?? "Rooftop solar design",
+            customer: reportMeta?.customer,
+            phone: reportMeta?.phone,
+            company: reportMeta?.company,
             lat,
             lng,
             kw,
@@ -395,10 +400,9 @@ export function CadStudio({
             avgAccess,
             monthlyAccess,
             shots,
-            photos: reportMeta.photos,
+            photos: reportMeta?.photos ?? [],
           }}
-        />
-      )}
+      />
 
       {/* Modelling toolbar */}
       <div className="rounded-xl border border-border bg-card p-3">
@@ -632,6 +636,16 @@ export function CadStudio({
               <NumField label="Rows" value={selGroup.rows} onChange={(v) => updGroup(setModel, selGroup.id, { rows: Math.max(1, Math.round(v)) })} />
               <NumField label="Rotation (°)" value={selGroup.rotY} onChange={(v) => updGroup(setModel, selGroup.id, { rotY: v })} />
               <NumField
+                label="Tilt (°)"
+                value={selGroup.tiltDeg ?? 11}
+                onChange={(v) => updGroup(setModel, selGroup.id, { tiltDeg: Math.max(0, Math.min(45, v)) })}
+              />
+              <NumField
+                label="Structure height (m)"
+                value={selGroup.mountHeight ?? 0}
+                onChange={(v) => updGroup(setModel, selGroup.id, { mountHeight: Math.max(0, v) })}
+              />
+              <NumField
                 label="Panel watt"
                 value={model.panel.watt}
                 onChange={(v) => patch({ panel: { ...model.panel, watt: Math.max(50, v) } })}
@@ -655,10 +669,11 @@ export function CadStudio({
                 </div>
               </div>
               <p className="col-span-2 text-[11px] text-muted-foreground">
-                Panels always sit at 11° from ground level facing south, on support columns (legs) with 1 sq ft
-                concrete footings. On a sloped roof the legs land on the sloped surface and grow to keep that 11°.
-                In "Same plane" every module of the group shares one continuous plane; "Follow surface" lets each
-                module hug the roof below it. Legs scale with size (3 kW → 4, 5 kW → 6).
+                Panels face south at the tilt you set (11° default, adjustable 0–45°) measured from ground level, on
+                support columns with 1 sq ft concrete footings. Row spacing follows the tilted panel's footprint, so
+                changing the tilt never leaves a gap between modules. Structure height lifts the whole array above the
+                roof. In "Same plane" every module shares one continuous plane; "Follow surface" lets each module hug
+                the roof below it. Legs: 2 per side up to 3 kW (4 total), 3 per side at 5 kW, +1 per side per extra 2 kW.
               </p>
             </div>
           )}

@@ -8,6 +8,10 @@ import { toast } from "sonner";
 import {
   billFromUnits,
   computeRoi,
+  computeLoan,
+  LOAN_RATE,
+  LOAN_MAX_PRINCIPAL,
+  LOAN_MAX_YEARS,
   effectiveRate,
   inr,
   marginalRate,
@@ -52,6 +56,9 @@ export function SolarReportDialog({
   const [costPerKw, setCostPerKw] = useState(55000);
   const [subsidy, setSubsidy] = useState(0);
   const [exportRate, setExportRate] = useState(3);
+  const [loanOn, setLoanOn] = useState(true);
+  const [loanAmount, setLoanAmount] = useState(200000);
+  const [loanYears, setLoanYears] = useState(5);
 
   const cycleUnits = mode === "units" ? units : unitsFromBill(amount, cycle);
   const monthlyUnits = cycle === "monthly" ? cycleUnits : cycleUnits / 2;
@@ -72,6 +79,11 @@ export function SolarReportDialog({
     [data.kw, annualUnits, monthlyUnits, costPerKw, subsidy, exportRate],
   );
 
+  const loan = useMemo(
+    () => computeLoan({ principal: loanAmount, years: loanYears, netCapex: roi.netCapex }),
+    [loanAmount, loanYears, roi.netCapex],
+  );
+
   function generate() {
     if (data.kw <= 0) {
       toast.error("Place panels in the 3D design first");
@@ -89,6 +101,7 @@ export function SolarReportDialog({
       costPerKw,
       subsidy,
       exportRate,
+      loan: loanOn ? loan : null,
     });
     const w = window.open("", "_blank");
     if (w) {
@@ -167,6 +180,32 @@ export function SolarReportDialog({
             <Num label="Export rate (₹/unit)" value={exportRate} onChange={setExportRate} />
           </div>
 
+          <div className="rounded-md border border-border p-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] font-semibold">Include loan plan</Label>
+              <button
+                type="button"
+                onClick={() => setLoanOn((v) => !v)}
+                className={`rounded-full px-3 py-1 text-[11px] ${loanOn ? "bg-primary text-primary-foreground" : "border border-border"}`}
+              >
+                {loanOn ? "On" : "Off"}
+              </button>
+            </div>
+            {loanOn && (
+              <>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <Num label={`Loan amount (₹, max ${LOAN_MAX_PRINCIPAL.toLocaleString("en-IN")})`} value={loanAmount} onChange={setLoanAmount} />
+                  <Num label={`Tenure (years, max ${LOAN_MAX_YEARS})`} value={loanYears} onChange={setLoanYears} />
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {(LOAN_RATE * 100).toFixed(2)}% p.a. · EMI <b>{inr(loan.emi)}</b>/month for {loan.years} years ·
+                  interest {inr(loan.totalInterest)}
+                  {loan.downPayment > 0 ? ` · down payment ${inr(loan.downPayment)}` : ""}
+                </p>
+              </>
+            )}
+          </div>
+
           <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
             <Cell label="System" value={`${data.kw.toFixed(2)} kW`} />
             <Cell label="Annual gen" value={`${annualUnits.toLocaleString("en-IN")} kWh`} />
@@ -227,6 +266,7 @@ function buildReportHtml(o: {
   costPerKw: number;
   subsidy: number;
   exportRate: number;
+  loan: ReturnType<typeof computeLoan> | null;
 }) {
   const { data, roi, rows } = o;
   const period = o.cycle === "monthly" ? "month" : "2 months";
@@ -348,6 +388,24 @@ ${photoCards ? `<h2>2. Geo-tagged site photos</h2><div class="grid">${photoCards
 </tbody></table>
 <table style="margin-top:10px"><thead><tr><th>Year</th><th>Generation (kWh)</th><th>Saving</th><th>Cumulative</th></tr></thead><tbody>${roiRows}</tbody></table>
 <p class="note">Assumes 5% annual tariff escalation, 0.7% annual module degradation and current KSEB domestic slabs. Actual output varies with weather, soiling and maintenance.</p>
+
+${
+  o.loan
+    ? `<h2>${photoCards ? 7 : 6}. Loan / EMI plan</h2>
+<table><tbody>
+<tr><th>Loan amount</th><td>${inr(o.loan.principal)} (max ₹2,00,000)</td></tr>
+<tr><th>Interest rate</th><td>${(o.loan.rate * 100).toFixed(2)}% per annum (reducing balance)</td></tr>
+<tr><th>Tenure</th><td>${o.loan.years} years (${o.loan.years * 12} EMIs, max 10 years)</td></tr>
+<tr><th>Monthly EMI</th><td><b>${inr(o.loan.emi)}</b></td></tr>
+<tr><th>Total interest</th><td>${inr(o.loan.totalInterest)}</td></tr>
+<tr><th>Total repayment</th><td>${inr(o.loan.totalPaid)}</td></tr>
+<tr><th>Down payment</th><td>${inr(o.loan.downPayment)}</td></tr>
+<tr><th>Average monthly saving (year 1)</th><td class="${Math.round(roi.firstYearSavings / 12) >= o.loan.emi ? "pos" : "neg"}">${inr(roi.firstYearSavings / 12)}</td></tr>
+<tr><th>Net monthly outflow during tenure</th><td>${inr(Math.max(0, o.loan.emi - roi.firstYearSavings / 12))}</td></tr>
+</tbody></table>
+<p class="note">EMI is calculated on a reducing-balance basis. Savings rise about 5% a year with tariff escalation, so the plan typically turns cash-positive well before the tenure ends; after repayment the full saving is retained.</p>`
+    : ""
+}
 
 <button class="btn" onclick="window.print()">Print / Save PDF</button>
 </div></body></html>`;
