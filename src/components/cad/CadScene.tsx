@@ -9,7 +9,6 @@ import {
   groupTilt,
   legCount,
   MOUNT_CLEARANCE,
-  PANEL_TILT_DEG,
   polyBounds,
   primBaseY,
   roofSurfaceAt,
