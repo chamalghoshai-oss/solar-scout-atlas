@@ -12,6 +12,9 @@ import {
   LOAN_RATE,
   LOAN_MAX_PRINCIPAL,
   LOAN_MAX_YEARS,
+  DOWN_PAYMENT_SHARE,
+  EXPORT_REDEMPTION_RATE,
+  financePlan,
   effectiveRate,
   inr,
   marginalRate,
@@ -55,9 +58,8 @@ export function SolarReportDialog({
   const [units, setUnits] = useState(400);
   const [costPerKw, setCostPerKw] = useState(55000);
   const [subsidy, setSubsidy] = useState(0);
-  const [exportRate, setExportRate] = useState(3);
+  const [exportRate, setExportRate] = useState(EXPORT_REDEMPTION_RATE);
   const [loanOn, setLoanOn] = useState(true);
-  const [loanAmount, setLoanAmount] = useState(200000);
   const [loanYears, setLoanYears] = useState(5);
 
   const cycleUnits = mode === "units" ? units : unitsFromBill(amount, cycle);
@@ -71,17 +73,19 @@ export function SolarReportDialog({
       computeRoi({
         kw: data.kw,
         annualUnits,
+        monthlyUnitsProduced: rows.map((r) => r.units),
         monthlyConsumption: monthlyUnits,
         costPerKw,
         subsidy,
         exportRate,
       }),
-    [data.kw, annualUnits, monthlyUnits, costPerKw, subsidy, exportRate],
+    [data.kw, annualUnits, rows, monthlyUnits, costPerKw, subsidy, exportRate],
   );
 
+  const plan = useMemo(() => financePlan(roi.netCapex), [roi.netCapex]);
   const loan = useMemo(
-    () => computeLoan({ principal: loanAmount, years: loanYears, netCapex: roi.netCapex }),
-    [loanAmount, loanYears, roi.netCapex],
+    () => computeLoan({ principal: plan.loan, years: loanYears, netCapex: roi.netCapex }),
+    [plan.loan, loanYears, roi.netCapex],
   );
 
   function generate() {
@@ -177,7 +181,12 @@ export function SolarReportDialog({
           <div className="grid grid-cols-2 gap-2">
             <Num label="System cost (₹/kW)" value={costPerKw} onChange={setCostPerKw} />
             <Num label="Subsidy (₹)" value={subsidy} onChange={setSubsidy} />
-            <Num label="Export rate (₹/unit)" value={exportRate} onChange={setExportRate} />
+            <Num label="Year-end export rate (₹/unit)" value={exportRate} onChange={setExportRate} />
+          </div>
+
+          <div className="rounded-md border border-border bg-muted/40 p-2 text-[11px] leading-relaxed">
+            Monthly net metering: each month's import above generation is billed on the KSEB slabs; net surplus
+            units bank up and are redeemed at ₹{exportRate}/unit at the end of the year.
           </div>
 
           <div className="rounded-md border border-border p-2">
@@ -194,13 +203,20 @@ export function SolarReportDialog({
             {loanOn && (
               <>
                 <div className="mt-2 grid grid-cols-2 gap-2">
-                  <Num label={`Loan amount (₹, max ${LOAN_MAX_PRINCIPAL.toLocaleString("en-IN")})`} value={loanAmount} onChange={setLoanAmount} />
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">
+                      Loan amount (90% of system, max {LOAN_MAX_PRINCIPAL.toLocaleString("en-IN")})
+                    </Label>
+                    <div className="flex h-8 items-center rounded-md border border-border px-2 text-xs font-semibold">
+                      {inr(loan.principal)}
+                    </div>
+                  </div>
                   <Num label={`Tenure (years, max ${LOAN_MAX_YEARS})`} value={loanYears} onChange={setLoanYears} />
                 </div>
                 <p className="mt-1 text-[11px] text-muted-foreground">
+                  Customer pays {Math.round(DOWN_PAYMENT_SHARE * 100)}% up front ({inr(plan.downPayment)}) ·{" "}
                   {(LOAN_RATE * 100).toFixed(2)}% p.a. · EMI <b>{inr(loan.emi)}</b>/month for {loan.years} years ·
                   interest {inr(loan.totalInterest)}
-                  {loan.downPayment > 0 ? ` · down payment ${inr(loan.downPayment)}` : ""}
                 </p>
               </>
             )}
