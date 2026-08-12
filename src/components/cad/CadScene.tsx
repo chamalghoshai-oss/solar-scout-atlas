@@ -1,6 +1,6 @@
 import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Sky, useGLTF } from "@react-three/drei";
-import { Suspense, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import {
   buildRoofFaces,
@@ -775,13 +775,13 @@ function Capturer({
   const { gl, scene, size } = useThree();
   captureRef.current = (view) => {
     const aspect = size.width / Math.max(1, size.height);
-    const cam = new THREE.PerspectiveCamera(40, aspect, 0.5, 2000);
+    const cam = new THREE.PerspectiveCamera(34, aspect, 0.5, 2000);
     if (view === "top") {
-      cam.position.set(0.001, top + span * 1.9, 0.001);
+      cam.position.set(0.001, top + span * 0.95, 0.001);
     } else {
-      cam.position.set(0, top + span * 0.35, span * 1.5);
+      cam.position.set(0, top + span * 0.22, span * 0.85);
     }
-    cam.lookAt(0, top * 0.5, 0);
+    cam.lookAt(0, top * 0.6, 0);
     cam.updateProjectionMatrix();
     try {
       gl.render(scene, cam);
