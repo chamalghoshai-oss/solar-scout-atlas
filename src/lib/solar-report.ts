@@ -109,7 +109,9 @@ export type RoiInput = {
   monthlyConsumption: number;
   costPerKw: number;
   subsidy: number;
-  /** ₹/unit paid by the DISCOM for exported surplus */
+  /** monthly generation (12 values) used for monthly net metering */
+  monthlyUnitsProduced?: number[];
+  /** ₹/unit redeemed for net surplus at the end of the settlement year */
   exportRate?: number;
   tariffEscalation?: number;
   degradation?: number;
@@ -133,11 +135,34 @@ export function computeRoi(i: RoiInput): RoiResult {
   const years = i.years ?? 25;
   const esc = i.tariffEscalation ?? 0.05;
   const deg = i.degradation ?? 0.007;
-  const exportRate = i.exportRate ?? 3.0;
+  const exportRate = i.exportRate ?? EXPORT_REDEMPTION_RATE;
   const annualConsumption = i.monthlyConsumption * 12;
-  const selfUse = Math.min(i.annualUnits, annualConsumption);
-  const exportUnits = Math.max(0, i.annualUnits - annualConsumption);
-  const rate = marginalRate(i.monthlyConsumption) || effectiveRate(i.monthlyConsumption);
+  const gen =
+    i.monthlyUnitsProduced && i.monthlyUnitsProduced.length === 12
+      ? i.monthlyUnitsProduced
+      : new Array(12).fill(i.annualUnits / 12);
+  // Monthly net metering: each month is settled against consumption, the
+  // deficit is billed on the KSEB slabs, surplus units bank up and are
+  // redeemed once a year at the export rate.
+  const netYear = (factor: number) => {
+    let billWithout = 0;
+    let billWith = 0;
+    let banked = 0;
+    let self = 0;
+    for (let m = 0; m < 12; m++) {
+      const prod = (gen[m] ?? 0) * factor;
+      const cons = i.monthlyConsumption;
+      const deficit = Math.max(0, cons - prod);
+      billWithout += billFromUnits(cons, "monthly");
+      billWith += billFromUnits(deficit, "monthly");
+      banked += Math.max(0, prod - cons);
+      self += Math.min(prod, cons);
+    }
+    return { billSaving: billWithout - billWith, banked, self, units: gen.reduce((a, u) => a + u, 0) * factor };
+  };
+  const y1 = netYear(1);
+  const selfUse = y1.self;
+  const exportUnits = y1.banked;
   const capex = i.kw * i.costPerKw;
   const netCapex = Math.max(0, capex - i.subsidy);
 
@@ -146,11 +171,9 @@ export function computeRoi(i: RoiInput): RoiResult {
   let breakEven: number | null = null;
   for (let y = 1; y <= years; y++) {
     const factor = Math.pow(1 - deg, y - 1);
-    const units = i.annualUnits * factor;
-    const self = Math.min(units, annualConsumption);
-    const exp = Math.max(0, units - annualConsumption);
     const escFactor = Math.pow(1 + esc, y - 1);
-    const savings = self * rate * escFactor + exp * exportRate * escFactor;
+    const n = netYear(factor);
+    const savings = n.billSaving * escFactor + n.banked * exportRate;
     const prev = cumulative;
     cumulative += savings;
     if (breakEven === null && cumulative >= 0) {
@@ -158,11 +181,12 @@ export function computeRoi(i: RoiInput): RoiResult {
     }
     rows.push({
       year: y,
-      units: Math.round(units),
+      units: Math.round(n.units),
       savings: Math.round(savings),
       cumulative: Math.round(cumulative),
     });
   }
+  void annualConsumption;
   return {
     capex,
     netCapex,
@@ -187,6 +211,16 @@ export function inr(n: number): string {
 export const LOAN_RATE = 0.0575;
 export const LOAN_MAX_PRINCIPAL = 200000;
 export const LOAN_MAX_YEARS = 10;
+/** Customer pays 10% of the system amount up front, the rest is financed. */
+export const DOWN_PAYMENT_SHARE = 0.1;
+/** ₹/unit redeemed for net exported surplus at the end of the year. */
+export const EXPORT_REDEMPTION_RATE = 2.75;
+
+/** Bank loan for a given system amount: 90% financed, capped at ₹2,00,000. */
+export function financePlan(netCapex: number) {
+  const loan = Math.min(LOAN_MAX_PRINCIPAL, Math.round(netCapex * (1 - DOWN_PAYMENT_SHARE)));
+  return { loan: Math.max(0, loan), downPayment: Math.max(0, Math.round(netCapex - loan)) };
+}
 
 export type LoanResult = {
   principal: number;

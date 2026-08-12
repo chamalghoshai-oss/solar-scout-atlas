@@ -12,6 +12,9 @@ import {
   LOAN_RATE,
   LOAN_MAX_PRINCIPAL,
   LOAN_MAX_YEARS,
+  DOWN_PAYMENT_SHARE,
+  EXPORT_REDEMPTION_RATE,
+  financePlan,
   effectiveRate,
   inr,
   marginalRate,
@@ -55,9 +58,8 @@ export function SolarReportDialog({
   const [units, setUnits] = useState(400);
   const [costPerKw, setCostPerKw] = useState(55000);
   const [subsidy, setSubsidy] = useState(0);
-  const [exportRate, setExportRate] = useState(3);
+  const [exportRate, setExportRate] = useState(EXPORT_REDEMPTION_RATE);
   const [loanOn, setLoanOn] = useState(true);
-  const [loanAmount, setLoanAmount] = useState(200000);
   const [loanYears, setLoanYears] = useState(5);
 
   const cycleUnits = mode === "units" ? units : unitsFromBill(amount, cycle);
@@ -71,17 +73,19 @@ export function SolarReportDialog({
       computeRoi({
         kw: data.kw,
         annualUnits,
+        monthlyUnitsProduced: rows.map((r) => r.units),
         monthlyConsumption: monthlyUnits,
         costPerKw,
         subsidy,
         exportRate,
       }),
-    [data.kw, annualUnits, monthlyUnits, costPerKw, subsidy, exportRate],
+    [data.kw, annualUnits, rows, monthlyUnits, costPerKw, subsidy, exportRate],
   );
 
+  const plan = useMemo(() => financePlan(roi.netCapex), [roi.netCapex]);
   const loan = useMemo(
-    () => computeLoan({ principal: loanAmount, years: loanYears, netCapex: roi.netCapex }),
-    [loanAmount, loanYears, roi.netCapex],
+    () => computeLoan({ principal: plan.loan, years: loanYears, netCapex: roi.netCapex }),
+    [plan.loan, loanYears, roi.netCapex],
   );
 
   function generate() {
@@ -177,7 +181,12 @@ export function SolarReportDialog({
           <div className="grid grid-cols-2 gap-2">
             <Num label="System cost (₹/kW)" value={costPerKw} onChange={setCostPerKw} />
             <Num label="Subsidy (₹)" value={subsidy} onChange={setSubsidy} />
-            <Num label="Export rate (₹/unit)" value={exportRate} onChange={setExportRate} />
+            <Num label="Year-end export rate (₹/unit)" value={exportRate} onChange={setExportRate} />
+          </div>
+
+          <div className="rounded-md border border-border bg-muted/40 p-2 text-[11px] leading-relaxed">
+            Monthly net metering: each month's import above generation is billed on the KSEB slabs; net surplus
+            units bank up and are redeemed at ₹{exportRate}/unit at the end of the year.
           </div>
 
           <div className="rounded-md border border-border p-2">
@@ -194,13 +203,20 @@ export function SolarReportDialog({
             {loanOn && (
               <>
                 <div className="mt-2 grid grid-cols-2 gap-2">
-                  <Num label={`Loan amount (₹, max ${LOAN_MAX_PRINCIPAL.toLocaleString("en-IN")})`} value={loanAmount} onChange={setLoanAmount} />
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">
+                      Loan amount (90% of system, max {LOAN_MAX_PRINCIPAL.toLocaleString("en-IN")})
+                    </Label>
+                    <div className="flex h-8 items-center rounded-md border border-border px-2 text-xs font-semibold">
+                      {inr(loan.principal)}
+                    </div>
+                  </div>
                   <Num label={`Tenure (years, max ${LOAN_MAX_YEARS})`} value={loanYears} onChange={setLoanYears} />
                 </div>
                 <p className="mt-1 text-[11px] text-muted-foreground">
+                  Customer pays {Math.round(DOWN_PAYMENT_SHARE * 100)}% up front ({inr(plan.downPayment)}) ·{" "}
                   {(LOAN_RATE * 100).toFixed(2)}% p.a. · EMI <b>{inr(loan.emi)}</b>/month for {loan.years} years ·
                   interest {inr(loan.totalInterest)}
-                  {loan.downPayment > 0 ? ` · down payment ${inr(loan.downPayment)}` : ""}
                 </p>
               </>
             )}
@@ -381,25 +397,25 @@ ${photoCards ? `<h2>2. Geo-tagged site photos</h2><div class="grid">${photoCards
 <tr><th>System cost</th><td>${inr(roi.capex)} (${inr(o.costPerKw)}/kW)</td></tr>
 <tr><th>Subsidy</th><td>${inr(o.subsidy)}</td></tr>
 <tr><th>Net investment</th><td><b>${inr(roi.netCapex)}</b></td></tr>
-<tr><th>Self-consumed</th><td>${roi.selfUse.toLocaleString("en-IN")} kWh/yr · exported ${roi.exportUnits.toLocaleString("en-IN")} kWh/yr @ ₹${o.exportRate}/unit</td></tr>
+<tr><th>Net metering</th><td>Monthly settlement — self-consumed ${roi.selfUse.toLocaleString("en-IN")} kWh/yr; import above generation billed on the KSEB slabs; net surplus ${roi.exportUnits.toLocaleString("en-IN")} kWh/yr redeemed at ₹${o.exportRate}/unit at year end</td></tr>
 <tr><th>First-year saving</th><td>${inr(roi.firstYearSavings)}</td></tr>
 <tr><th>Break-even</th><td><b>${roi.breakEvenYears ? `${roi.breakEvenYears} years` : "beyond 25 years"}</b></td></tr>
 <tr><th>25-year net gain</th><td class="pos">${inr(roi.lifetimeSavings)}</td></tr>
 </tbody></table>
 <table style="margin-top:10px"><thead><tr><th>Year</th><th>Generation (kWh)</th><th>Saving</th><th>Cumulative</th></tr></thead><tbody>${roiRows}</tbody></table>
-<p class="note">Assumes 5% annual tariff escalation, 0.7% annual module degradation and current KSEB domestic slabs. Actual output varies with weather, soiling and maintenance.</p>
+<p class="note">Savings are computed month by month under net metering: generation first offsets that month's consumption, any remaining import is billed on the KSEB telescopic slabs (incl. 10% fixed charges), and any surplus is banked and redeemed at ₹${o.exportRate} per unit at the end of the settlement year. Assumes 5% annual tariff escalation and 0.7% annual module degradation.</p>
 
 ${
   o.loan
     ? `<h2>${photoCards ? 7 : 6}. Loan / EMI plan</h2>
 <table><tbody>
-<tr><th>Loan amount</th><td>${inr(o.loan.principal)} (max ₹2,00,000)</td></tr>
+<tr><th>Customer initial payment</th><td><b>${inr(o.loan.downPayment)}</b> (10% of the system amount)</td></tr>
+<tr><th>Bank loan</th><td>${inr(o.loan.principal)} (balance financed, max ₹2,00,000)</td></tr>
 <tr><th>Interest rate</th><td>${(o.loan.rate * 100).toFixed(2)}% per annum (reducing balance)</td></tr>
 <tr><th>Tenure</th><td>${o.loan.years} years (${o.loan.years * 12} EMIs, max 10 years)</td></tr>
 <tr><th>Monthly EMI</th><td><b>${inr(o.loan.emi)}</b></td></tr>
 <tr><th>Total interest</th><td>${inr(o.loan.totalInterest)}</td></tr>
 <tr><th>Total repayment</th><td>${inr(o.loan.totalPaid)}</td></tr>
-<tr><th>Down payment</th><td>${inr(o.loan.downPayment)}</td></tr>
 <tr><th>Average monthly saving (year 1)</th><td class="${Math.round(roi.firstYearSavings / 12) >= o.loan.emi ? "pos" : "neg"}">${inr(roi.firstYearSavings / 12)}</td></tr>
 <tr><th>Net monthly outflow during tenure</th><td>${inr(Math.max(0, o.loan.emi - roi.firstYearSavings / 12))}</td></tr>
 </tbody></table>
