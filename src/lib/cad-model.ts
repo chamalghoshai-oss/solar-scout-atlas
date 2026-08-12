@@ -26,7 +26,7 @@ export type Prim = {
   asset?: BuildingAsset;
 };
 
-export type BuildingAsset = "venice" | "ichijoushi";
+export type BuildingAsset = "venice" | "ichijoushi" | "castle";
 export type TreeSpecies = "generic" | "leafy" | "coconut" | "coconut_palm" | "mango";
 
 export type Tree = {
