@@ -170,67 +170,14 @@ function useDrag(
 
 /* ---------------- scene pieces ---------------- */
 
-/** Procedural grass / soil texture so the surroundings read as real ground. */
-function grassTexture(): THREE.Texture {
-  const s = 512;
-  const c = document.createElement("canvas");
-  c.width = c.height = s;
-  const g = c.getContext("2d")!;
-  g.fillStyle = "#6f9c4d";
-  g.fillRect(0, 0, s, s);
-  // soft patches
-  for (let i = 0; i < 260; i++) {
-    const x = Math.random() * s;
-    const y = Math.random() * s;
-    const r = 12 + Math.random() * 60;
-    const grd = g.createRadialGradient(x, y, 0, x, y, r);
-    const dark = Math.random() > 0.5;
-    grd.addColorStop(0, dark ? "rgba(72,110,48,0.5)" : "rgba(146,183,96,0.45)");
-    grd.addColorStop(1, "rgba(0,0,0,0)");
-    g.fillStyle = grd;
-    g.beginPath();
-    g.arc(x, y, r, 0, Math.PI * 2);
-    g.fill();
-  }
-  // grass blades
-  for (let i = 0; i < 9000; i++) {
-    const x = Math.random() * s;
-    const y = Math.random() * s;
-    const h = 2 + Math.random() * 4;
-    const t = Math.random();
-    g.strokeStyle = `rgba(${60 + t * 60},${105 + t * 70},${40 + t * 40},0.55)`;
-    g.lineWidth = 1;
-    g.beginPath();
-    g.moveTo(x, y);
-    g.lineTo(x + (Math.random() - 0.5) * 2, y - h);
-    g.stroke();
-  }
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.anisotropy = 8;
-  return tex;
-}
-
+/** Plain dark green ground. */
 function Ground({ span }: { span: number }) {
   const size = span * 8;
-  const tex = useMemo(() => {
-    const t = grassTexture();
-    t.repeat.set(size / 6, size / 6);
-    return t;
-  }, [size]);
-  useEffect(() => () => tex.dispose(), [tex]);
   return (
-    <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[size, size]} />
-        <meshStandardMaterial map={tex} color="#ffffff" roughness={1} metalness={0} />
-      </mesh>
-      {/* soft dirt apron right around the building for contact grounding */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]} receiveShadow>
-        <circleGeometry args={[span * 0.75, 64]} />
-        <meshStandardMaterial color="#9b8a6d" roughness={1} transparent opacity={0.35} />
-      </mesh>
-    </group>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <planeGeometry args={[size, size]} />
+      <meshStandardMaterial color="#1a472a" roughness={1} metalness={0} />
+    </mesh>
   );
 }
 
