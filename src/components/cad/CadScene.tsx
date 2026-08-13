@@ -631,16 +631,103 @@ function TreeMesh({
   );
 }
 
+/** Poly-crystalline cell texture: 6x10 cells, white grid lines + busbars. */
+let cellTexture: THREE.CanvasTexture | null = null;
+function polyCellTexture(): THREE.CanvasTexture {
+  if (cellTexture) return cellTexture;
+  const COLS = 6;
+  const ROWS = 10;
+  const CELL = 96;
+  const PAD = 10;
+  const cv = document.createElement("canvas");
+  cv.width = COLS * CELL + PAD * 2;
+  cv.height = ROWS * CELL + PAD * 2;
+  const g = cv.getContext("2d")!;
+  // white backsheet showing between cells
+  g.fillStyle = "#f2f4f7";
+  g.fillRect(0, 0, cv.width, cv.height);
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const x = PAD + c * CELL;
+      const y = PAD + r * CELL;
+      g.fillStyle = "#ffffff";
+      g.fillRect(x, y, CELL, CELL);
+      // cell body (light grey, tinted blue later by material colour)
+      g.fillStyle = "#d8dde3";
+      g.fillRect(x + 3, y + 3, CELL - 6, CELL - 6);
+      // polycrystalline grain speckle
+      for (let i = 0; i < 90; i++) {
+        const gx = x + 3 + Math.random() * (CELL - 6);
+        const gy = y + 3 + Math.random() * (CELL - 6);
+        const s = 3 + Math.random() * 12;
+        g.fillStyle = `rgba(255,255,255,${0.03 + Math.random() * 0.09})`;
+        g.beginPath();
+        g.moveTo(gx, gy);
+        g.lineTo(gx + s, gy + s * 0.4);
+        g.lineTo(gx + s * 0.5, gy + s);
+        g.closePath();
+        g.fill();
+      }
+      // fine finger lines
+      g.strokeStyle = "rgba(255,255,255,0.35)";
+      g.lineWidth = 1;
+      for (let f = 1; f < 14; f++) {
+        const fy = y + (f * (CELL - 6)) / 14 + 3;
+        g.beginPath();
+        g.moveTo(x + 4, fy);
+        g.lineTo(x + CELL - 4, fy);
+        g.stroke();
+      }
+      // busbars
+      g.fillStyle = "rgba(255,255,255,0.85)";
+      for (const bx of [0.3, 0.7]) {
+        g.fillRect(x + CELL * bx - 2, y + 3, 4, CELL - 6);
+      }
+    }
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.anisotropy = 8;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  cellTexture = tex;
+  return tex;
+}
+
 function PanelMesh({ p, color }: { p: PlacedPanel; color: string }) {
   const w = 1.13;
   const l = 2.28;
+  const t = 0.035;
+  const frame = 0.03;
+  const tex = React.useMemo(() => polyCellTexture(), []);
   return (
     <group position={p.pos} rotation={[0, p.yaw, 0]}>
       <group rotation={[p.tilt, 0, 0]}>
+        {/* laminate with poly-cell texture */}
         <mesh castShadow receiveShadow>
-          <boxGeometry args={[w, 0.04, l]} />
-          <meshStandardMaterial color={color} metalness={0.3} roughness={0.3} />
+          <boxGeometry args={[w - frame * 2, t, l - frame * 2]} />
+          <meshStandardMaterial
+            color={color}
+            map={tex}
+            metalness={0.25}
+            roughness={0.28}
+          />
         </mesh>
+        {/* anodised aluminium frame */}
+        {[
+          { pos: [0, 0, l / 2 - frame / 2], args: [w, t * 1.6, frame] },
+          { pos: [0, 0, -(l / 2 - frame / 2)], args: [w, t * 1.6, frame] },
+          { pos: [w / 2 - frame / 2, 0, 0], args: [frame, t * 1.6, l] },
+          { pos: [-(w / 2 - frame / 2), 0, 0], args: [frame, t * 1.6, l] },
+        ].map((r, i) => (
+          <mesh
+            key={i}
+            position={r.pos as [number, number, number]}
+            castShadow
+            receiveShadow
+          >
+            <boxGeometry args={r.args as [number, number, number]} />
+            <meshStandardMaterial color="#c9ced6" metalness={0.85} roughness={0.28} />
+          </mesh>
+        ))}
       </group>
     </group>
   );
