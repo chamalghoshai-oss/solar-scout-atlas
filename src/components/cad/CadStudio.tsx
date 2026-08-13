@@ -69,6 +69,7 @@ export function CadStudio({
   const [outlineN, setOutlineN] = useState<NPt[]>([]);
   const [selection, setSelection] = useState<Selection>(null);
   const [heatOn, setHeatOn] = useState(true);
+  const [groundColor, setGroundColor] = useState("#1a472a");
   const [selStorey, setSelStorey] = useState<string | null>(null);
 
   const [dayOfYear, setDayOfYear] = useState(() => {
@@ -311,6 +312,7 @@ export function CadStudio({
             sunVec={sunVec}
             altitude={pos.altitude}
             heatOn={heatOn}
+            groundColor={groundColor}
             selection={selection}
             onSelect={setSelection}
             onMovePrim={(id, x, z) =>
@@ -363,6 +365,19 @@ export function CadStudio({
         <p className="mt-2 text-[11px] text-muted-foreground">
           Sun elevation {((pos.altitude * 180) / Math.PI).toFixed(1)}° · azimuth {((pos.azimuth * 180) / Math.PI).toFixed(0)}°
         </p>
+        <div className="mt-3 flex items-center justify-between rounded-md border border-border px-2 py-1.5">
+          <Label className="text-[11px] text-muted-foreground">Ground colour</Label>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[11px] uppercase">{groundColor}</span>
+            <input
+              type="color"
+              value={groundColor}
+              onChange={(e) => setGroundColor(e.target.value)}
+              className="h-7 w-10 cursor-pointer rounded border border-border bg-transparent p-0.5"
+              aria-label="Pick ground colour"
+            />
+          </div>
+        </div>
       </div>
 
       {/* Live totals */}

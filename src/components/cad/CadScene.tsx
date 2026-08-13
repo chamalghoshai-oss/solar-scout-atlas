@@ -170,13 +170,13 @@ function useDrag(
 
 /* ---------------- scene pieces ---------------- */
 
-/** Plain dark green ground. */
-function Ground({ span }: { span: number }) {
+/** Plain solid-colour ground. */
+function Ground({ span, color }: { span: number; color: string }) {
   const size = span * 8;
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
       <planeGeometry args={[size, size]} />
-      <meshStandardMaterial color="#1a472a" roughness={1} metalness={0} />
+      <meshStandardMaterial color={color} roughness={1} metalness={0} />
     </mesh>
   );
 }
@@ -768,6 +768,7 @@ export function CadScene({
   onMoveTree,
   onMoveGroup,
   captureRef,
+  groundColor = "#1a472a",
 }: {
   model: CadModel;
   panels: PlacedPanel[];
@@ -783,6 +784,7 @@ export function CadScene({
   onMoveTree: (id: string, x: number, z: number) => void;
   onMoveGroup: (id: string, x: number, z: number) => void;
   captureRef?: { current: CaptureFn | null };
+  groundColor?: string;
 }) {
   const [dragging, setDragging] = useState(false);
   const heat = useMemo(
@@ -841,7 +843,7 @@ export function CadScene({
           )}
           {dayLight && <SunMarker vec={sunVec} />}
 
-          <Ground span={span} />
+          <Ground span={span} color={groundColor} />
           <Building model={model} heat={heat} brick={brick} />
 
           {model.storeys.map((s) => (
