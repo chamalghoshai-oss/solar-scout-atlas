@@ -170,13 +170,13 @@ function useDrag(
 
 /* ---------------- scene pieces ---------------- */
 
-/** Plain dark green ground. */
-function Ground({ span }: { span: number }) {
+/** Plain solid-colour ground. */
+function Ground({ span, color }: { span: number; color: string }) {
   const size = span * 8;
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
       <planeGeometry args={[size, size]} />
-      <meshStandardMaterial color="#1a472a" roughness={1} metalness={0} />
+      <meshStandardMaterial color={color} roughness={1} metalness={0} />
     </mesh>
   );
 }
