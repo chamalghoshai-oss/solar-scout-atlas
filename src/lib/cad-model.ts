@@ -612,19 +612,39 @@ export type PanelShade = {
   access: number;
 };
 
-/** Per-panel yearly sun access, ignoring the panels themselves as casters. */
+/** Per-panel yearly sun access, ignoring the panels themselves as casters.
+ *  Each module is sampled at its centre plus its four corners so partial
+ *  shading (a canopy clipping one edge) is counted proportionally. */
 export function panelShading(
   panels: PlacedPanel[],
   casters: Caster[],
   samples: SunSample[],
 ): number[] {
+  const HW = 1.13 / 2;
+  const HL = 2.28 / 2;
   return panels.map((p) => {
     let total = 0;
     let got = 0;
-    const o: Vec3 = [p.pos[0], p.pos[1] + 0.05, p.pos[2]];
+    const cy = Math.cos(p.yaw);
+    const sy = Math.sin(p.yaw);
+    const ct = Math.cos(p.tilt);
+    const st = Math.sin(p.tilt);
+    const pts: Vec3[] = [[p.pos[0], p.pos[1] + 0.05, p.pos[2]]];
+    for (const [lx, lz] of [
+      [-HW, -HL],
+      [HW, -HL],
+      [-HW, HL],
+      [HW, HL],
+    ] as const) {
+      const y = p.pos[1] + 0.05 - lz * st;
+      const zz = lz * ct;
+      pts.push([p.pos[0] + lx * cy + zz * sy, y, p.pos[2] - lx * sy + zz * cy]);
+    }
     for (const s of samples) {
+      let lit = 0;
+      for (const o of pts) if (!rayBlocked(o, s.dir, casters)) lit++;
       total += s.weight;
-      if (!rayBlocked(o, s.dir, casters)) got += s.weight;
+      got += (s.weight * lit) / pts.length;
     }
     return total > 0 ? got / total : 0;
   });

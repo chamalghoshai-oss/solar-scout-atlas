@@ -577,11 +577,14 @@ function GltfModel({
   height,
   rotY = 0,
   tint,
+  radius,
 }: {
   url: string;
   height: number;
   rotY?: number;
   tint?: string;
+  /** clamp the model's horizontal half-extent to this many metres */
+  radius?: number;
 }) {
   const gltf = useGLTF(url);
   const object = useMemo(() => {
@@ -591,6 +594,15 @@ function GltfModel({
     box.getSize(size);
     const s = size.y > 1e-4 ? height / size.y : 1;
     o.scale.setScalar(s);
+    if (radius && radius > 0) {
+      const halfX = (size.x / 2) * s;
+      const halfZ = (size.z / 2) * s;
+      const half = Math.max(halfX, halfZ);
+      if (half > 1e-4) {
+        const k = radius / half;
+        o.scale.set(s * k, s, s * k);
+      }
+    }
     o.position.y = -box.min.y * s;
     o.traverse((c) => {
       const mesh = c as THREE.Mesh;
@@ -602,7 +614,7 @@ function GltfModel({
       }
     });
     return o;
-  }, [gltf, height, tint]);
+  }, [gltf, height, tint, radius]);
   return <primitive object={object} rotation={[0, (rotY * Math.PI) / 180, 0]} />;
 }
 
@@ -643,6 +655,7 @@ function TreeMesh({
           <GltfModel
             url={TREE_MODELS[species]}
             height={tree.h}
+            radius={tree.r}
             tint={selected ? "#f97316" : undefined}
           />
         </Suspense>
