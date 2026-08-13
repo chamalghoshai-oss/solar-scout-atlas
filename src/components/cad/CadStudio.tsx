@@ -69,6 +69,7 @@ export function CadStudio({
   const [outlineN, setOutlineN] = useState<NPt[]>([]);
   const [selection, setSelection] = useState<Selection>(null);
   const [heatOn, setHeatOn] = useState(true);
+  const [groundColor, setGroundColor] = useState("#1a472a");
   const [selStorey, setSelStorey] = useState<string | null>(null);
 
   const [dayOfYear, setDayOfYear] = useState(() => {
