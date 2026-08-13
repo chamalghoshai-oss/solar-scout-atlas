@@ -312,6 +312,7 @@ export function CadStudio({
             sunVec={sunVec}
             altitude={pos.altitude}
             heatOn={heatOn}
+            groundColor={groundColor}
             selection={selection}
             onSelect={setSelection}
             onMovePrim={(id, x, z) =>
