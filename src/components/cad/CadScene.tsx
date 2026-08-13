@@ -768,6 +768,7 @@ export function CadScene({
   onMoveTree,
   onMoveGroup,
   captureRef,
+  groundColor = "#1a472a",
 }: {
   model: CadModel;
   panels: PlacedPanel[];
@@ -783,6 +784,7 @@ export function CadScene({
   onMoveTree: (id: string, x: number, z: number) => void;
   onMoveGroup: (id: string, x: number, z: number) => void;
   captureRef?: { current: CaptureFn | null };
+  groundColor?: string;
 }) {
   const [dragging, setDragging] = useState(false);
   const heat = useMemo(
