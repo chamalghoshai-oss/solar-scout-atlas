@@ -843,7 +843,7 @@ export function CadScene({
           )}
           {dayLight && <SunMarker vec={sunVec} />}
 
-          <Ground span={span} />
+          <Ground span={span} color={groundColor} />
           <Building model={model} heat={heat} brick={brick} />
 
           {model.storeys.map((s) => (
