@@ -949,6 +949,9 @@ export function CadScene({
   onMoveGroup,
   captureRef,
   groundColor = "#1a472a",
+  measureMode = false,
+  measurePts = [],
+  onMeasurePick,
 }: {
   model: CadModel;
   panels: PlacedPanel[];
@@ -965,6 +968,9 @@ export function CadScene({
   onMoveGroup: (id: string, x: number, z: number) => void;
   captureRef?: { current: CaptureFn | null };
   groundColor?: string;
+  measureMode?: boolean;
+  measurePts?: MeasurePt[];
+  onMeasurePick?: (p: MeasurePt) => void;
 }) {
   const [dragging, setDragging] = useState(false);
   const heat = useMemo(
@@ -999,7 +1005,7 @@ export function CadScene({
         dpr={[1, 2]}
         gl={{ preserveDrawingBuffer: true }}
         camera={{ position: [span * 0.9, top + span * 0.8, span * 1.1], fov: 40, far: 2000 }}
-        onPointerMissed={() => onSelect(null)}
+        onPointerMissed={() => !measureMode && onSelect(null)}
       >
         <Suspense fallback={null}>
           {captureRef && <Capturer captureRef={captureRef} span={span} top={top} />}
@@ -1074,6 +1080,9 @@ export function CadScene({
               </group>
             );
           })}
+
+          <MeasurePicker active={measureMode} onPick={(p) => onMeasurePick?.(p)} />
+          <Measurements pts={measurePts} />
 
           <Controls enabled={!dragging} target={[0, top * 0.5, 0]} />
         </Suspense>
