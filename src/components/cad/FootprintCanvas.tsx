@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Undo2, X, Check, Ruler } from "lucide-react";
 import type { Pt } from "@/lib/cad-model";
@@ -94,6 +94,25 @@ export function FootprintCanvas({
   const mPairs: { a: NPt; b: NPt }[] = [];
   for (let i = 0; i + 1 < mpts.length; i += 2) mPairs.push({ a: mpts[i], b: mpts[i + 1] });
 
+  /* ---------- 1 m grid lines in real-world coordinates ---------- */
+  const hM = siteWidthM / aspect;
+  const gridLines = useMemo(() => {
+    const vLines: { u: number; m: number }[] = [];
+    const hLines: { v: number; m: number }[] = [];
+    const xMin = Math.ceil(-siteWidthM / 2);
+    const xMax = Math.floor(siteWidthM / 2);
+    for (let x = xMin; x <= xMax; x++) {
+      vLines.push({ u: (x / siteWidthM + 0.5) * 100, m: x });
+    }
+    const zMin = Math.ceil(-hM / 2);
+    const zMax = Math.floor(hM / 2);
+    for (let z = zMin; z <= zMax; z++) {
+      hLines.push({ v: (z / hM + 0.5) * 100, m: z });
+    }
+    return { vLines, hLines };
+  }, [siteWidthM, hM]);
+
+
   return (
     <div className="space-y-2">
       <div
@@ -109,6 +128,32 @@ export function FootprintCanvas({
           <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,hsl(var(--border))_1px,transparent_1px),linear-gradient(hsl(var(--border))_1px,transparent_1px)] bg-[length:24px_24px] opacity-60" />
         )}
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 h-full w-full">
+          {/* 1 m grid lines */}
+          <g opacity={0.35}>
+            {gridLines.vLines.map(({ u, m }) => (
+              <line key={`vx${m}`} x1={u} y1={0} x2={u} y2={100} stroke="hsl(var(--border))" strokeWidth={0.35} vectorEffect="non-scaling-stroke" />
+            ))}
+            {gridLines.hLines.map(({ v, m }) => (
+              <line key={`hy${m}`} x1={0} y1={v} x2={100} y2={v} stroke="hsl(var(--border))" strokeWidth={0.35} vectorEffect="non-scaling-stroke" />
+            ))}
+          </g>
+          {/* axis / 5 m labels */}
+          <g>
+            {gridLines.vLines
+              .filter(({ m }) => m !== 0 && m % 5 === 0)
+              .map(({ u, m }) => (
+                <text key={`vl${m}`} x={u + 0.6} y={3} fill="hsl(var(--muted-foreground))" fontSize={2.2} fontWeight={500}>
+                  {m}m
+                </text>
+              ))}
+            {gridLines.hLines
+              .filter(({ m }) => m !== 0 && m % 5 === 0)
+              .map(({ v, m }) => (
+                <text key={`hl${m}`} x={0.6} y={v - 0.6} fill="hsl(var(--muted-foreground))" fontSize={2.2} fontWeight={500}>
+                  {m}m
+                </text>
+              ))}
+          </g>
           {ghost && mode !== "outline" && (
             <polygon points={ghost} fill="rgba(56,189,248,0.15)" stroke="#38bdf8" strokeWidth={0.4} vectorEffect="non-scaling-stroke" />
           )}
