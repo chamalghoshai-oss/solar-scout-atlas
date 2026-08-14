@@ -94,6 +94,25 @@ export function FootprintCanvas({
   const mPairs: { a: NPt; b: NPt }[] = [];
   for (let i = 0; i + 1 < mpts.length; i += 2) mPairs.push({ a: mpts[i], b: mpts[i + 1] });
 
+  /* ---------- 1 m grid lines in real-world coordinates ---------- */
+  const hM = siteWidthM / aspect;
+  const gridLines = useMemo(() => {
+    const vLines: { u: number; m: number }[] = [];
+    const hLines: { v: number; m: number }[] = [];
+    const xMin = Math.ceil(-siteWidthM / 2);
+    const xMax = Math.floor(siteWidthM / 2);
+    for (let x = xMin; x <= xMax; x++) {
+      vLines.push({ u: (x / siteWidthM + 0.5) * 100, m: x });
+    }
+    const zMin = Math.ceil(-hM / 2);
+    const zMax = Math.floor(hM / 2);
+    for (let z = zMin; z <= zMax; z++) {
+      hLines.push({ v: (z / hM + 0.5) * 100, m: z });
+    }
+    return { vLines, hLines };
+  }, [siteWidthM, hM]);
+
+
   return (
     <div className="space-y-2">
       <div
