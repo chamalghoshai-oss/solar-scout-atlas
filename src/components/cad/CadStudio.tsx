@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { Box, Building2, Cylinder, FileText, Grid3X3, Loader2, Pause, Pencil, Play, Save, Sun, Trees, Trash2 } from "lucide-react";
+import { Box, Building2, Cylinder, FileText, Grid3X3, Loader2, Pause, Pencil, Play, Ruler, Save, Sun, Trees, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { dateFromDayHour, sunPosition, sunVector, MONTH_LABELS } from "@/lib/sun";
 import {
@@ -24,7 +24,7 @@ import {
   type Vec3,
 } from "@/lib/cad-model";
 import { FootprintCanvas, type DrawMode } from "@/components/cad/FootprintCanvas";
-import type { CaptureFn, Selection } from "@/components/cad/CadScene";
+import type { CaptureFn, MeasurePt, Selection } from "@/components/cad/CadScene";
 import { BUILDING_OPTIONS, TREE_OPTIONS } from "@/lib/cad-assets";
 import { SolarReportDialog, type ReportPhoto } from "@/components/cad/SolarReportDialog";
 
@@ -71,6 +71,8 @@ export function CadStudio({
   const [heatOn, setHeatOn] = useState(true);
   const [groundColor, setGroundColor] = useState("#1a472a");
   const [selStorey, setSelStorey] = useState<string | null>(null);
+  const [measureMode, setMeasureMode] = useState(false);
+  const [measurePts, setMeasurePts] = useState<MeasurePt[]>([]);
 
   const [dayOfYear, setDayOfYear] = useState(() => {
     const now = new Date();
@@ -315,6 +317,9 @@ export function CadStudio({
             groundColor={groundColor}
             selection={selection}
             onSelect={setSelection}
+            measureMode={measureMode}
+            measurePts={measurePts}
+            onMeasurePick={(p) => setMeasurePts((l) => [...l, p])}
             onMovePrim={(id, x, z) =>
               setModel((m) => ({ ...m, prims: m.prims.map((p) => (p.id === id ? { ...p, x, z } : p)) }))
             }
