@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Undo2, X, Check } from "lucide-react";
+import { Undo2, X, Check, Ruler } from "lucide-react";
 import type { Pt } from "@/lib/cad-model";
 
 export type DrawMode = "outline" | "ridge" | "storey";
@@ -27,6 +27,8 @@ export function FootprintCanvas({
   onCancel: () => void;
 }) {
   const [pts, setPts] = useState<NPt[]>([]);
+  const [measuring, setMeasuring] = useState(false);
+  const [mpts, setMpts] = useState<NPt[]>([]);
   const ref = useRef<HTMLDivElement>(null);
 
   const need = mode === "ridge" ? 2 : 3;
@@ -41,6 +43,12 @@ export function FootprintCanvas({
     return raw;
   }
 
+  /** Distance between two normalised points, in metres. */
+  function distM(a: NPt, b: NPt) {
+    const hM = siteWidthM / aspect;
+    return Math.hypot((b.u - a.u) * siteWidthM, (b.v - a.v) * hM);
+  }
+
   function addPoint(e: React.MouseEvent) {
     const el = ref.current;
     if (!el) return;
@@ -48,6 +56,10 @@ export function FootprintCanvas({
     const u = (e.clientX - r.left) / r.width;
     const v = (e.clientY - r.top) / r.height;
     if (u < 0 || u > 1 || v < 0 || v > 1) return;
+    if (measuring) {
+      setMpts((m) => (m.length % 2 === 0 ? [...m, { u, v }] : [...m, { u, v }]));
+      return;
+    }
     setPts((p) => {
       const next = [...p, { u, v }];
       if (mode === "ridge" && next.length === 2) {
@@ -73,6 +85,14 @@ export function FootprintCanvas({
 
   const poly = pts.map((p) => `${p.u * 100},${p.v * 100}`).join(" ");
   const ghost = (existingOutline ?? []).map((p) => `${p.u * 100},${p.v * 100}`).join(" ");
+
+  // Edge labels for the shape being drawn.
+  const edges: { a: NPt; b: NPt }[] = [];
+  for (let i = 0; i + 1 < pts.length; i++) edges.push({ a: pts[i], b: pts[i + 1] });
+  if (mode !== "ridge" && pts.length > 2) edges.push({ a: pts[pts.length - 1], b: pts[0] });
+
+  const mPairs: { a: NPt; b: NPt }[] = [];
+  for (let i = 0; i + 1 < mpts.length; i += 2) mPairs.push({ a: mpts[i], b: mpts[i + 1] });
 
   return (
     <div className="space-y-2">
@@ -101,14 +121,65 @@ export function FootprintCanvas({
           {pts.map((p, i) => (
             <circle key={i} cx={p.u * 100} cy={p.v * 100} r={1} fill="#fff" stroke="#f97316" strokeWidth={0.5} vectorEffect="non-scaling-stroke" />
           ))}
+          {mPairs.map((m, i) => (
+            <line
+              key={`m${i}`}
+              x1={m.a.u * 100}
+              y1={m.a.v * 100}
+              x2={m.b.u * 100}
+              y2={m.b.v * 100}
+              stroke="#22c55e"
+              strokeWidth={0.6}
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+          {mpts.map((p, i) => (
+            <circle key={`md${i}`} cx={p.u * 100} cy={p.v * 100} r={1} fill="#22c55e" stroke="#fff" strokeWidth={0.4} vectorEffect="non-scaling-stroke" />
+          ))}
         </svg>
+        {/* Length labels (HTML so text isn't distorted by the viewBox) */}
+        <div className="pointer-events-none absolute inset-0">
+          {edges.map((e, i) => (
+            <span
+              key={`e${i}`}
+              className="absolute -translate-x-1/2 -translate-y-1/2 rounded bg-orange-500 px-1 py-px text-[9px] font-semibold text-white"
+              style={{ left: `${((e.a.u + e.b.u) / 2) * 100}%`, top: `${((e.a.v + e.b.v) / 2) * 100}%` }}
+            >
+              {distM(e.a, e.b).toFixed(2)} m
+            </span>
+          ))}
+          {mPairs.map((m, i) => (
+            <span
+              key={`ml${i}`}
+              className="absolute -translate-x-1/2 -translate-y-1/2 rounded bg-emerald-600 px-1 py-px text-[9px] font-semibold text-white"
+              style={{ left: `${((m.a.u + m.b.u) / 2) * 100}%`, top: `${((m.a.v + m.b.v) / 2) * 100}%` }}
+            >
+              {distM(m.a, m.b).toFixed(2)} m
+            </span>
+          ))}
+        </div>
         <div className="pointer-events-none absolute left-2 top-2 rounded bg-background/85 px-2 py-1 text-[11px] font-medium">
-          {mode === "ridge"
+          {measuring
+            ? `Ruler: tap two points to measure (${mpts.length % 2 === 0 ? "start" : "end"})`
+            : mode === "ridge"
             ? `Click the ridge start and end (${pts.length}/2)`
             : mode === "storey"
               ? `Click corners of the extra building / upper storey · double-click or Enter to close (${pts.length})`
               : `Click roof corners · double-click or Enter to close (${pts.length})`}
         </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant={measuring ? "default" : "outline"}
+          className="flex-1"
+          onClick={() => setMeasuring((m) => !m)}
+        >
+          <Ruler className="mr-1.5 h-3.5 w-3.5" /> {measuring ? "Measuring" : "Measure"}
+        </Button>
+        <Button size="sm" variant="outline" className="flex-1" onClick={() => setMpts([])} disabled={!mpts.length}>
+          Clear measures
+        </Button>
       </div>
       <div className="flex gap-2">
         <Button size="sm" variant="outline" className="flex-1" onClick={() => setPts((p) => p.slice(0, -1))} disabled={!pts.length}>
