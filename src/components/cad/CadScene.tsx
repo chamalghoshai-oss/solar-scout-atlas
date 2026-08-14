@@ -697,7 +697,7 @@ function PanelMesh({ p, color }: { p: PlacedPanel; color: string }) {
   const l = 2.28;
   const t = 0.035;
   const frame = 0.03;
-  const tex = React.useMemo(() => polyCellTexture(), []);
+  const tex = useMemo(() => polyCellTexture(), []);
   return (
     <group position={p.pos} rotation={[0, p.yaw, 0]}>
       <group rotation={[p.tilt, 0, 0]}>
