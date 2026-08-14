@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Undo2, X, Check, Ruler } from "lucide-react";
 import type { Pt } from "@/lib/cad-model";
