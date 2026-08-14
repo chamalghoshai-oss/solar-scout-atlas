@@ -337,6 +337,27 @@ export function CadStudio({
 
       {/* Sun controls — directly under the 3D view */}
       <div className="rounded-xl border border-border bg-card p-3">
+        <div className="mb-3 flex items-center gap-2 rounded-md border border-border px-2 py-1.5">
+          <Ruler className="h-4 w-4 text-primary" />
+          <span className="text-[11px] text-muted-foreground">
+            {measureMode ? "Tap two points in the 3D view to measure" : "Ruler"}
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            {measurePts.length > 0 && (
+              <Button size="sm" variant="outline" className="h-7 px-2 text-[11px]" onClick={() => setMeasurePts([])}>
+                Clear
+              </Button>
+            )}
+            <Switch
+              checked={measureMode}
+              onCheckedChange={(v) => {
+                setMeasureMode(v);
+                if (v) setSelection(null);
+              }}
+              aria-label="Ruler tool"
+            />
+          </div>
+        </div>
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-sm font-semibold">
             <Sun className="h-4 w-4 text-primary" />
