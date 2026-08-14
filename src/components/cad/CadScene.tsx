@@ -1,5 +1,5 @@
 import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
-import { OrbitControls, Sky, useGLTF } from "@react-three/drei";
+import { Html, OrbitControls, Sky, useGLTF } from "@react-three/drei";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import {
@@ -784,9 +784,102 @@ function panelBlue(access: number): string {
 
 function SunMarker({ vec }: { vec: Vec3 }) {
   return (
-    <mesh position={vec}>
+    <mesh position={vec} name="no-measure">
       <sphereGeometry args={[2.2, 16, 16]} />
       <meshBasicMaterial color="#ffd83d" />
+    </mesh>
+  );
+}
+
+/* ---------------- measuring ---------------- */
+
+export type MeasurePt = [number, number, number];
+
+function MeasurePicker({ active, onPick }: { active: boolean; onPick: (p: MeasurePt) => void }) {
+  const { gl, camera, scene } = useThree();
+  useEffect(() => {
+    if (!active) return;
+    const el = gl.domElement;
+    const ray = new THREE.Raycaster();
+    const v = new THREE.Vector2();
+    let downAt: { x: number; y: number } | null = null;
+    const down = (e: PointerEvent) => {
+      downAt = { x: e.clientX, y: e.clientY };
+    };
+    const up = (e: PointerEvent) => {
+      if (!downAt) return;
+      const moved = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y);
+      downAt = null;
+      if (moved > 6) return; // it was an orbit/pan drag
+      const r = el.getBoundingClientRect();
+      v.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+      v.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+      ray.setFromCamera(v, camera);
+      const hit = ray
+        .intersectObjects(scene.children, true)
+        .find((h) => h.object.visible && h.object.name !== "no-measure" && h.distance < 5000);
+      if (hit) onPick([hit.point.x, hit.point.y, hit.point.z]);
+    };
+    el.addEventListener("pointerdown", down);
+    el.addEventListener("pointerup", up);
+    return () => {
+      el.removeEventListener("pointerdown", down);
+      el.removeEventListener("pointerup", up);
+    };
+  }, [active, gl, camera, scene, onPick]);
+  return null;
+}
+
+function Measurements({ pts }: { pts: MeasurePt[] }) {
+  const pairs: [MeasurePt, MeasurePt][] = [];
+  for (let i = 0; i + 1 < pts.length; i += 2) pairs.push([pts[i], pts[i + 1]]);
+  const pending = pts.length % 2 ? pts[pts.length - 1] : null;
+
+  const lines = useMemo(
+    () =>
+      pairs.map(([a, b]) => {
+        const geo = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(...a),
+          new THREE.Vector3(...b),
+        ]);
+        const mat = new THREE.LineBasicMaterial({ color: "#f97316", depthTest: false });
+        const line = new THREE.Line(geo, mat);
+        line.renderOrder = 999;
+        line.name = "no-measure";
+        return line;
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(pts)],
+  );
+
+  return (
+    <group>
+      {pairs.map(([a, b], i) => {
+        const d = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+        const mid: MeasurePt = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+        return (
+          <group key={i}>
+            <primitive object={lines[i]} />
+            <Dot p={a} />
+            <Dot p={b} />
+            <Html position={mid} center distanceFactor={undefined} zIndexRange={[20, 0]}>
+              <span className="whitespace-nowrap rounded bg-orange-500 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow">
+                {d.toFixed(2)} m
+              </span>
+            </Html>
+          </group>
+        );
+      })}
+      {pending && <Dot p={pending} />}
+    </group>
+  );
+}
+
+function Dot({ p }: { p: MeasurePt }) {
+  return (
+    <mesh position={p} name="no-measure" renderOrder={999}>
+      <sphereGeometry args={[0.16, 12, 12]} />
+      <meshBasicMaterial color="#f97316" depthTest={false} />
     </mesh>
   );
 }
@@ -856,6 +949,9 @@ export function CadScene({
   onMoveGroup,
   captureRef,
   groundColor = "#1a472a",
+  measureMode = false,
+  measurePts = [],
+  onMeasurePick,
 }: {
   model: CadModel;
   panels: PlacedPanel[];
@@ -872,6 +968,9 @@ export function CadScene({
   onMoveGroup: (id: string, x: number, z: number) => void;
   captureRef?: { current: CaptureFn | null };
   groundColor?: string;
+  measureMode?: boolean;
+  measurePts?: MeasurePt[];
+  onMeasurePick?: (p: MeasurePt) => void;
 }) {
   const [dragging, setDragging] = useState(false);
   const heat = useMemo(
@@ -906,7 +1005,7 @@ export function CadScene({
         dpr={[1, 2]}
         gl={{ preserveDrawingBuffer: true }}
         camera={{ position: [span * 0.9, top + span * 0.8, span * 1.1], fov: 40, far: 2000 }}
-        onPointerMissed={() => onSelect(null)}
+        onPointerMissed={() => !measureMode && onSelect(null)}
       >
         <Suspense fallback={null}>
           {captureRef && <Capturer captureRef={captureRef} span={span} top={top} />}
@@ -981,6 +1080,9 @@ export function CadScene({
               </group>
             );
           })}
+
+          <MeasurePicker active={measureMode} onPick={(p) => onMeasurePick?.(p)} />
+          <Measurements pts={measurePts} />
 
           <Controls enabled={!dragging} target={[0, top * 0.5, 0]} />
         </Suspense>

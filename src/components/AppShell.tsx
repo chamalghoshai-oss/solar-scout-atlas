@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Map, Compass, Users, Settings as SettingsIcon, User, Boxes } from "lucide-react";
+import { Map, Compass, Users, Settings as SettingsIcon, User, Boxes, Home } from "lucide-react";
 import { type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +17,16 @@ export function AppShell({ children, fullBleed = false }: { children: ReactNode;
   return (
     <div className="flex min-h-[100dvh] flex-col bg-background text-foreground">
       <main className={cn("flex-1", fullBleed ? "relative" : "px-4 pt-4 pb-24")}>{children}</main>
+      {pathname !== "/" && (
+        <Link
+          to="/"
+          aria-label="Return home"
+          className="fixed bottom-20 right-3 z-50 flex items-center gap-1.5 rounded-full border border-border bg-background/95 px-3 py-2 text-xs font-semibold shadow-lg backdrop-blur hover:bg-muted"
+        >
+          <Home className="h-4 w-4 text-primary" />
+          Home
+        </Link>
+      )}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <ul className="mx-auto grid max-w-md grid-cols-6">
           {tabs.map((t) => {
