@@ -215,11 +215,19 @@ export const LOAN_MAX_YEARS = 10;
 export const DOWN_PAYMENT_SHARE = 0.1;
 /** ₹/unit redeemed for net exported surplus at the end of the year. */
 export const EXPORT_REDEMPTION_RATE = 2.75;
+/** Extra future consumption: 30% additional usage + 20% new equipment. */
+export const FUTURE_USAGE_EXTRA = 0.5;
+/** Subsidy is credited back to the customer's account after ~2 months. */
+export const SUBSIDY_CREDIT_MONTHS = 2;
 
-/** Bank loan for a given system amount: 90% financed, capped at ₹2,00,000. */
-export function financePlan(netCapex: number) {
-  const loan = Math.min(LOAN_MAX_PRINCIPAL, Math.round(netCapex * (1 - DOWN_PAYMENT_SHARE)));
-  return { loan: Math.max(0, loan), downPayment: Math.max(0, Math.round(netCapex - loan)) };
+/**
+ * Bank loan for the FULL system amount: 90% financed, capped at ₹2,00,000.
+ * Whatever the bank does not finance is paid by the customer up front; the
+ * subsidy is credited back to the customer's account ~2 months later.
+ */
+export function financePlan(systemAmount: number) {
+  const loan = Math.min(LOAN_MAX_PRINCIPAL, Math.round(systemAmount * (1 - DOWN_PAYMENT_SHARE)));
+  return { loan: Math.max(0, loan), downPayment: Math.max(0, Math.round(systemAmount - loan)) };
 }
 
 export type LoanResult = {
