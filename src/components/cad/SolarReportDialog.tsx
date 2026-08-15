@@ -326,6 +326,7 @@ function esc(s: string) {
 
 function buildReportHtml(o: {
   data: ReportData;
+  photos: ReportPhoto[];
   cycle: BillCycle;
   cycleUnits: number;
   cycleBill: number;
@@ -378,7 +379,7 @@ function buildReportHtml(o: {
     )
     .join("");
 
-  const photoCards = data.photos
+  const photoCards = o.photos
     .map(
       (p) => `<figure><img src="${p.url}" alt="Site photo"/><figcaption>${
         p.lat != null ? `${p.lat.toFixed(5)}, ${p.lng?.toFixed(5) ?? ""}` : esc(p.label ?? "Site photo")
