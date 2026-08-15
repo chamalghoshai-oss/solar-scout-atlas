@@ -252,6 +252,83 @@ export function SolarReportDialog({
                 {loanOn ? "On" : "Off"}
               </button>
             </div>
+          </div>
+
+          <div className="rounded-md border border-border p-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] font-semibold">Report photos</Label>
+              <div className="flex overflow-hidden rounded-full border border-border text-[11px]">
+                {(["auto", "custom"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setPhotoMode(m)}
+                    className={`px-3 py-1 ${photoMode === m ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                  >
+                    {m === "auto" ? "Auto pick" : "Upload 2"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {photoMode === "auto" ? (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {autoPhotos.length
+                  ? `Using the first ${autoPhotos.length} geo-tagged site photo${autoPhotos.length > 1 ? "s" : ""}.`
+                  : "No site photos available — the report will skip the photo section."}
+              </p>
+            ) : (
+              <>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {[0, 1].map((i) => {
+                    const p = customPhotos[i];
+                    return p ? (
+                      <div key={i} className="relative">
+                        <img src={p.url} alt={p.label ?? "Selected"} className="h-20 w-full rounded-md object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setCustomPhotos((l) => l.filter((_, j) => j !== i))}
+                          className="absolute right-1 top-1 rounded-full bg-background/90 p-0.5"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => fileRef.current?.click()}
+                        className="flex h-20 items-center justify-center gap-1 rounded-md border border-dashed border-border text-[11px] text-muted-foreground"
+                      >
+                        <ImagePlus className="h-4 w-4" /> Add image
+                      </button>
+                    );
+                  })}
+                </div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    pickFiles(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+              </>
+            )}
+          </div>
+
+          <div className="hidden">
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setLoanOn((v) => !v)}
+                className={`rounded-full px-3 py-1 text-[11px] ${loanOn ? "bg-primary text-primary-foreground" : "border border-border"}`}
+              >
+                {loanOn ? "On" : "Off"}
+              </button>
+            </div>
             {loanOn && (
               <>
                 <div className="mt-2 grid grid-cols-2 gap-2">
