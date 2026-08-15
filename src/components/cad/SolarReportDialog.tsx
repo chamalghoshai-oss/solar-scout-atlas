@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FileText } from "lucide-react";
+import { FileText, ImagePlus, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   billFromUnits,
@@ -63,6 +63,30 @@ export function SolarReportDialog({
   const [exportRate, setExportRate] = useState(EXPORT_REDEMPTION_RATE);
   const [loanOn, setLoanOn] = useState(true);
   const [loanYears, setLoanYears] = useState(5);
+  const [photoMode, setPhotoMode] = useState<"auto" | "custom">("auto");
+  const [customPhotos, setCustomPhotos] = useState<ReportPhoto[]>([]);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const autoPhotos = useMemo(() => data.photos.slice(0, 2), [data.photos]);
+  const reportPhotos = photoMode === "custom" ? customPhotos : autoPhotos;
+
+  function pickFiles(list: FileList | null) {
+    if (!list?.length) return;
+    const files = Array.from(list).slice(0, 2);
+    Promise.all(
+      files.map(
+        (f) =>
+          new Promise<ReportPhoto>((res, rej) => {
+            const r = new FileReader();
+            r.onload = () => res({ url: String(r.result), label: f.name });
+            r.onerror = rej;
+            r.readAsDataURL(f);
+          }),
+      ),
+    )
+      .then((imgs) => setCustomPhotos((prev) => [...prev, ...imgs].slice(0, 2)))
+      .catch(() => toast.error("Could not read those images"));
+  }
 
   const cycleUnits = mode === "units" ? units : unitsFromBill(amount, cycle);
   const monthlyUnits = cycle === "monthly" ? cycleUnits : cycleUnits / 2;
@@ -113,6 +137,7 @@ export function SolarReportDialog({
     }
     const html = buildReportHtml({
       data,
+      photos: reportPhotos,
       cycle,
       cycleUnits,
       cycleBill,
@@ -227,6 +252,83 @@ export function SolarReportDialog({
                 {loanOn ? "On" : "Off"}
               </button>
             </div>
+          </div>
+
+          <div className="rounded-md border border-border p-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] font-semibold">Report photos</Label>
+              <div className="flex overflow-hidden rounded-full border border-border text-[11px]">
+                {(["auto", "custom"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setPhotoMode(m)}
+                    className={`px-3 py-1 ${photoMode === m ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                  >
+                    {m === "auto" ? "Auto pick" : "Upload 2"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {photoMode === "auto" ? (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {autoPhotos.length
+                  ? `Using the first ${autoPhotos.length} geo-tagged site photo${autoPhotos.length > 1 ? "s" : ""}.`
+                  : "No site photos available — the report will skip the photo section."}
+              </p>
+            ) : (
+              <>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {[0, 1].map((i) => {
+                    const p = customPhotos[i];
+                    return p ? (
+                      <div key={i} className="relative">
+                        <img src={p.url} alt={p.label ?? "Selected"} className="h-20 w-full rounded-md object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setCustomPhotos((l) => l.filter((_, j) => j !== i))}
+                          className="absolute right-1 top-1 rounded-full bg-background/90 p-0.5"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => fileRef.current?.click()}
+                        className="flex h-20 items-center justify-center gap-1 rounded-md border border-dashed border-border text-[11px] text-muted-foreground"
+                      >
+                        <ImagePlus className="h-4 w-4" /> Add image
+                      </button>
+                    );
+                  })}
+                </div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    pickFiles(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
+              </>
+            )}
+          </div>
+
+          <div className="hidden">
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setLoanOn((v) => !v)}
+                className={`rounded-full px-3 py-1 text-[11px] ${loanOn ? "bg-primary text-primary-foreground" : "border border-border"}`}
+              >
+                {loanOn ? "On" : "Off"}
+              </button>
+            </div>
             {loanOn && (
               <>
                 <div className="mt-2 grid grid-cols-2 gap-2">
@@ -301,6 +403,7 @@ function esc(s: string) {
 
 function buildReportHtml(o: {
   data: ReportData;
+  photos: ReportPhoto[];
   cycle: BillCycle;
   cycleUnits: number;
   cycleBill: number;
@@ -353,7 +456,7 @@ function buildReportHtml(o: {
     )
     .join("");
 
-  const photoCards = data.photos
+  const photoCards = o.photos
     .map(
       (p) => `<figure><img src="${p.url}" alt="Site photo"/><figcaption>${
         p.lat != null ? `${p.lat.toFixed(5)}, ${p.lng?.toFixed(5) ?? ""}` : esc(p.label ?? "Site photo")
