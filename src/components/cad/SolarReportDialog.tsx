@@ -436,6 +436,18 @@ ${photoCards ? `<h2>2. Geo-tagged site photos</h2><div class="grid">${photoCards
 <table style="margin-top:10px"><thead><tr><th>Year</th><th>Generation (kWh)</th><th>Saving</th><th>Cumulative</th></tr></thead><tbody>${roiRows}</tbody></table>
 <p class="note">Savings are computed month by month under net metering: generation first offsets that month's consumption, any remaining import is billed on the KSEB telescopic slabs (incl. 10% fixed charges), and any surplus is banked and redeemed at ₹${o.exportRate} per unit at the end of the settlement year. Assumes 5% annual tariff escalation and 0.7% annual module degradation.</p>
 
+<h2>${photoCards ? 6 : 5}b. Future usage projection</h2>
+<p class="note">Households typically grow their load over time. This projection adds <b>30% additional usage</b> and <b>20% new equipment</b> — a total of <b>${Math.round(FUTURE_USAGE_EXTRA * 100)}% higher consumption</b>. At today's ${Math.round(o.monthlyUnits)} units/month that becomes <b>${Math.round(o.monthlyUnitsFuture)} units/month</b> (${Math.round(o.monthlyUnitsFuture * 12).toLocaleString("en-IN")} kWh/year). More self-consumption means fewer banked units and higher slab savings, so payback improves.</p>
+<table><tbody>
+<tr><th>Future consumption</th><td>${Math.round(o.monthlyUnitsFuture)} kWh/month · ${Math.round(o.monthlyUnitsFuture * 12).toLocaleString("en-IN")} kWh/year</td></tr>
+<tr><th>Self-consumed solar</th><td>${o.roiFuture.selfUse.toLocaleString("en-IN")} kWh/yr (vs ${roi.selfUse.toLocaleString("en-IN")} kWh/yr today)</td></tr>
+<tr><th>Exported surplus</th><td>${o.roiFuture.exportUnits.toLocaleString("en-IN")} kWh/yr</td></tr>
+<tr><th>First-year saving</th><td>${inr(o.roiFuture.firstYearSavings)}</td></tr>
+<tr><th>Payback period (future usage)</th><td><b>${o.roiFuture.breakEvenYears ? `${o.roiFuture.breakEvenYears} years` : "beyond 25 years"}</b> (vs ${roi.breakEvenYears ? `${roi.breakEvenYears} years` : "25+ years"} at current usage)</td></tr>
+<tr><th>25-year net gain</th><td class="pos">${inr(o.roiFuture.lifetimeSavings)}</td></tr>
+</tbody></table>
+<table style="margin-top:10px"><thead><tr><th>Year</th><th>Generation (kWh)</th><th>Saving</th><th>Cumulative</th></tr></thead><tbody>${futureRows}</tbody></table>
+
 ${
   o.loan
     ? `<h2>${photoCards ? 7 : 6}. Loan / EMI plan</h2>
