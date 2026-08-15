@@ -129,12 +129,32 @@ export function FootprintCanvas({
         )}
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 h-full w-full">
           {/* 1 m grid lines */}
-          <g opacity={0.35}>
+          <g>
             {gridLines.vLines.map(({ u, m }) => (
-              <line key={`vx${m}`} x1={u} y1={0} x2={u} y2={100} stroke="hsl(var(--border))" strokeWidth={0.35} vectorEffect="non-scaling-stroke" />
+              <line
+                key={`vx${m}`}
+                x1={u}
+                y1={0}
+                x2={u}
+                y2={100}
+                stroke="#ffffff"
+                strokeOpacity={m % 5 === 0 ? 0.85 : 0.4}
+                strokeWidth={m % 5 === 0 ? 1.2 : 0.6}
+                vectorEffect="non-scaling-stroke"
+              />
             ))}
             {gridLines.hLines.map(({ v, m }) => (
-              <line key={`hy${m}`} x1={0} y1={v} x2={100} y2={v} stroke="hsl(var(--border))" strokeWidth={0.35} vectorEffect="non-scaling-stroke" />
+              <line
+                key={`hy${m}`}
+                x1={0}
+                y1={v}
+                x2={100}
+                y2={v}
+                stroke="#ffffff"
+                strokeOpacity={m % 5 === 0 ? 0.85 : 0.4}
+                strokeWidth={m % 5 === 0 ? 1.2 : 0.6}
+                vectorEffect="non-scaling-stroke"
+              />
             ))}
           </g>
           {/* axis / 5 m labels */}

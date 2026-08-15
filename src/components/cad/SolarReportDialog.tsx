@@ -15,6 +15,8 @@ import {
   DOWN_PAYMENT_SHARE,
   EXPORT_REDEMPTION_RATE,
   financePlan,
+  FUTURE_USAGE_EXTRA,
+  SUBSIDY_CREDIT_MONTHS,
   effectiveRate,
   inr,
   marginalRate,
@@ -82,10 +84,26 @@ export function SolarReportDialog({
     [data.kw, annualUnits, rows, monthlyUnits, costPerKw, subsidy, exportRate],
   );
 
-  const plan = useMemo(() => financePlan(roi.netCapex), [roi.netCapex]);
+  const roiFuture = useMemo(
+    () =>
+      computeRoi({
+        kw: data.kw,
+        annualUnits,
+        monthlyUnitsProduced: rows.map((r) => r.units),
+        monthlyConsumption: monthlyUnits * (1 + FUTURE_USAGE_EXTRA),
+        costPerKw,
+        subsidy,
+        exportRate,
+      }),
+    [data.kw, annualUnits, rows, monthlyUnits, costPerKw, subsidy, exportRate],
+  );
+
+  // The customer pays the full system amount up front (initial payment + bank
+  // loan); the subsidy is credited back to the account after ~2 months.
+  const plan = useMemo(() => financePlan(roi.capex), [roi.capex]);
   const loan = useMemo(
-    () => computeLoan({ principal: plan.loan, years: loanYears, netCapex: roi.netCapex }),
-    [plan.loan, loanYears, roi.netCapex],
+    () => computeLoan({ principal: plan.loan, years: loanYears, netCapex: roi.capex }),
+    [plan.loan, loanYears, roi.capex],
   );
 
   function generate() {
@@ -102,6 +120,8 @@ export function SolarReportDialog({
       rows,
       annualUnits,
       roi,
+      roiFuture,
+      monthlyUnitsFuture: monthlyUnits * (1 + FUTURE_USAGE_EXTRA),
       costPerKw,
       subsidy,
       exportRate,
@@ -185,6 +205,13 @@ export function SolarReportDialog({
           </div>
 
           <div className="rounded-md border border-border bg-muted/40 p-2 text-[11px] leading-relaxed">
+            Future usage: consumption is also projected {Math.round(FUTURE_USAGE_EXTRA * 100)}% higher (30% more
+            usage + 20% new equipment) — {Math.round(monthlyUnits * (1 + FUTURE_USAGE_EXTRA))} units/month — with its
+            own payback of{" "}
+            <b>{roiFuture.breakEvenYears ? `${roiFuture.breakEvenYears} yrs` : "—"}</b>.
+          </div>
+
+          <div className="rounded-md border border-border bg-muted/40 p-2 text-[11px] leading-relaxed">
             Monthly net metering: each month's import above generation is billed on the KSEB slabs; net surplus
             units bank up and are redeemed at ₹{exportRate}/unit at the end of the year.
           </div>
@@ -214,7 +241,9 @@ export function SolarReportDialog({
                   <Num label={`Tenure (years, max ${LOAN_MAX_YEARS})`} value={loanYears} onChange={setLoanYears} />
                 </div>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Customer pays {Math.round(DOWN_PAYMENT_SHARE * 100)}% up front ({inr(plan.downPayment)}) ·{" "}
+                  Customer pays {inr(plan.downPayment)} up front (min {Math.round(DOWN_PAYMENT_SHARE * 100)}% + any
+                  amount above the ₹2L bank cap) · subsidy {inr(subsidy)} credited back after{" "}
+                  {SUBSIDY_CREDIT_MONTHS} months ·{" "}
                   {(LOAN_RATE * 100).toFixed(2)}% p.a. · EMI <b>{inr(loan.emi)}</b>/month for {loan.years} years ·
                   interest {inr(loan.totalInterest)}
                 </p>
@@ -279,6 +308,8 @@ function buildReportHtml(o: {
   rows: ReturnType<typeof monthlyProduction>;
   annualUnits: number;
   roi: ReturnType<typeof computeRoi>;
+  roiFuture: ReturnType<typeof computeRoi>;
+  monthlyUnitsFuture: number;
   costPerKw: number;
   subsidy: number;
   exportRate: number;
@@ -309,6 +340,13 @@ function buildReportHtml(o: {
     .join("");
 
   const roiRows = roi.rows
+    .map(
+      (r) =>
+        `<tr><td>${r.year}</td><td>${r.units.toLocaleString("en-IN")}</td><td>${inr(r.savings)}</td><td class="${r.cumulative >= 0 ? "pos" : "neg"}">${inr(r.cumulative)}</td></tr>`,
+    )
+    .join("");
+
+  const futureRows = o.roiFuture.rows
     .map(
       (r) =>
         `<tr><td>${r.year}</td><td>${r.units.toLocaleString("en-IN")}</td><td>${inr(r.savings)}</td><td class="${r.cumulative >= 0 ? "pos" : "neg"}">${inr(r.cumulative)}</td></tr>`,
@@ -405,12 +443,27 @@ ${photoCards ? `<h2>2. Geo-tagged site photos</h2><div class="grid">${photoCards
 <table style="margin-top:10px"><thead><tr><th>Year</th><th>Generation (kWh)</th><th>Saving</th><th>Cumulative</th></tr></thead><tbody>${roiRows}</tbody></table>
 <p class="note">Savings are computed month by month under net metering: generation first offsets that month's consumption, any remaining import is billed on the KSEB telescopic slabs (incl. 10% fixed charges), and any surplus is banked and redeemed at ₹${o.exportRate} per unit at the end of the settlement year. Assumes 5% annual tariff escalation and 0.7% annual module degradation.</p>
 
+<h2>${photoCards ? 6 : 5}b. Future usage projection</h2>
+<p class="note">Households typically grow their load over time. This projection adds <b>30% additional usage</b> and <b>20% new equipment</b> — a total of <b>${Math.round(FUTURE_USAGE_EXTRA * 100)}% higher consumption</b>. At today's ${Math.round(o.monthlyUnits)} units/month that becomes <b>${Math.round(o.monthlyUnitsFuture)} units/month</b> (${Math.round(o.monthlyUnitsFuture * 12).toLocaleString("en-IN")} kWh/year). More self-consumption means fewer banked units and higher slab savings, so payback improves.</p>
+<table><tbody>
+<tr><th>Future consumption</th><td>${Math.round(o.monthlyUnitsFuture)} kWh/month · ${Math.round(o.monthlyUnitsFuture * 12).toLocaleString("en-IN")} kWh/year</td></tr>
+<tr><th>Self-consumed solar</th><td>${o.roiFuture.selfUse.toLocaleString("en-IN")} kWh/yr (vs ${roi.selfUse.toLocaleString("en-IN")} kWh/yr today)</td></tr>
+<tr><th>Exported surplus</th><td>${o.roiFuture.exportUnits.toLocaleString("en-IN")} kWh/yr</td></tr>
+<tr><th>First-year saving</th><td>${inr(o.roiFuture.firstYearSavings)}</td></tr>
+<tr><th>Payback period (future usage)</th><td><b>${o.roiFuture.breakEvenYears ? `${o.roiFuture.breakEvenYears} years` : "beyond 25 years"}</b> (vs ${roi.breakEvenYears ? `${roi.breakEvenYears} years` : "25+ years"} at current usage)</td></tr>
+<tr><th>25-year net gain</th><td class="pos">${inr(o.roiFuture.lifetimeSavings)}</td></tr>
+</tbody></table>
+<table style="margin-top:10px"><thead><tr><th>Year</th><th>Generation (kWh)</th><th>Saving</th><th>Cumulative</th></tr></thead><tbody>${futureRows}</tbody></table>
+
 ${
   o.loan
     ? `<h2>${photoCards ? 7 : 6}. Loan / EMI plan</h2>
 <table><tbody>
-<tr><th>Customer initial payment</th><td><b>${inr(o.loan.downPayment)}</b> (10% of the system amount)</td></tr>
-<tr><th>Bank loan</th><td>${inr(o.loan.principal)} (balance financed, max ₹2,00,000)</td></tr>
+<tr><th>Total system amount</th><td>${inr(roi.capex)}</td></tr>
+<tr><th>Bank loan</th><td>${inr(o.loan.principal)} (up to 90% of the system amount, maximum ₹2,00,000)</td></tr>
+<tr><th>Customer initial payment</th><td><b>${inr(o.loan.downPayment)}</b> — 10% of the system amount plus any balance above the ₹2,00,000 bank cap</td></tr>
+<tr><th>Subsidy</th><td>${inr(o.subsidy)} — the customer first pays the full amount (initial payment + loan); the subsidy is credited back to the customer's account about ${SUBSIDY_CREDIT_MONTHS} months after commissioning</td></tr>
+<tr><th>Effective net cost after subsidy</th><td><b>${inr(roi.netCapex)}</b></td></tr>
 <tr><th>Interest rate</th><td>${(o.loan.rate * 100).toFixed(2)}% per annum (reducing balance)</td></tr>
 <tr><th>Tenure</th><td>${o.loan.years} years (${o.loan.years * 12} EMIs, max 10 years)</td></tr>
 <tr><th>Monthly EMI</th><td><b>${inr(o.loan.emi)}</b></td></tr>
