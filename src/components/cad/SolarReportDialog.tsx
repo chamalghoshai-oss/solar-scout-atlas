@@ -346,6 +346,13 @@ function buildReportHtml(o: {
     )
     .join("");
 
+  const futureRows = o.roiFuture.rows
+    .map(
+      (r) =>
+        `<tr><td>${r.year}</td><td>${r.units.toLocaleString("en-IN")}</td><td>${inr(r.savings)}</td><td class="${r.cumulative >= 0 ? "pos" : "neg"}">${inr(r.cumulative)}</td></tr>`,
+    )
+    .join("");
+
   const photoCards = data.photos
     .map(
       (p) => `<figure><img src="${p.url}" alt="Site photo"/><figcaption>${
