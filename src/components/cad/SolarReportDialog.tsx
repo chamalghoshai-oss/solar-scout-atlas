@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FileText } from "lucide-react";
+import { FileText, ImagePlus, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   billFromUnits,
@@ -63,6 +63,30 @@ export function SolarReportDialog({
   const [exportRate, setExportRate] = useState(EXPORT_REDEMPTION_RATE);
   const [loanOn, setLoanOn] = useState(true);
   const [loanYears, setLoanYears] = useState(5);
+  const [photoMode, setPhotoMode] = useState<"auto" | "custom">("auto");
+  const [customPhotos, setCustomPhotos] = useState<ReportPhoto[]>([]);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const autoPhotos = useMemo(() => data.photos.slice(0, 2), [data.photos]);
+  const reportPhotos = photoMode === "custom" ? customPhotos : autoPhotos;
+
+  function pickFiles(list: FileList | null) {
+    if (!list?.length) return;
+    const files = Array.from(list).slice(0, 2);
+    Promise.all(
+      files.map(
+        (f) =>
+          new Promise<ReportPhoto>((res, rej) => {
+            const r = new FileReader();
+            r.onload = () => res({ url: String(r.result), label: f.name });
+            r.onerror = rej;
+            r.readAsDataURL(f);
+          }),
+      ),
+    )
+      .then((imgs) => setCustomPhotos((prev) => [...prev, ...imgs].slice(0, 2)))
+      .catch(() => toast.error("Could not read those images"));
+  }
 
   const cycleUnits = mode === "units" ? units : unitsFromBill(amount, cycle);
   const monthlyUnits = cycle === "monthly" ? cycleUnits : cycleUnits / 2;
@@ -113,6 +137,7 @@ export function SolarReportDialog({
     }
     const html = buildReportHtml({
       data,
+      photos: reportPhotos,
       cycle,
       cycleUnits,
       cycleBill,
