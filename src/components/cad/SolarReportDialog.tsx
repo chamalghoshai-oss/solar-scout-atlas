@@ -440,8 +440,11 @@ ${
   o.loan
     ? `<h2>${photoCards ? 7 : 6}. Loan / EMI plan</h2>
 <table><tbody>
-<tr><th>Customer initial payment</th><td><b>${inr(o.loan.downPayment)}</b> (10% of the system amount)</td></tr>
-<tr><th>Bank loan</th><td>${inr(o.loan.principal)} (balance financed, max ₹2,00,000)</td></tr>
+<tr><th>Total system amount</th><td>${inr(roi.capex)}</td></tr>
+<tr><th>Bank loan</th><td>${inr(o.loan.principal)} (up to 90% of the system amount, maximum ₹2,00,000)</td></tr>
+<tr><th>Customer initial payment</th><td><b>${inr(o.loan.downPayment)}</b> — 10% of the system amount plus any balance above the ₹2,00,000 bank cap</td></tr>
+<tr><th>Subsidy</th><td>${inr(o.subsidy)} — the customer first pays the full amount (initial payment + loan); the subsidy is credited back to the customer's account about ${SUBSIDY_CREDIT_MONTHS} months after commissioning</td></tr>
+<tr><th>Effective net cost after subsidy</th><td><b>${inr(roi.netCapex)}</b></td></tr>
 <tr><th>Interest rate</th><td>${(o.loan.rate * 100).toFixed(2)}% per annum (reducing balance)</td></tr>
 <tr><th>Tenure</th><td>${o.loan.years} years (${o.loan.years * 12} EMIs, max 10 years)</td></tr>
 <tr><th>Monthly EMI</th><td><b>${inr(o.loan.emi)}</b></td></tr>
