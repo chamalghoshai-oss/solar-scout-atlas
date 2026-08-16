@@ -243,19 +243,6 @@ export function SolarReportDialog({
 
           <div className="rounded-md border border-border p-2">
             <div className="flex items-center justify-between">
-              <Label className="text-[11px] font-semibold">Include loan plan</Label>
-              <button
-                type="button"
-                onClick={() => setLoanOn((v) => !v)}
-                className={`rounded-full px-3 py-1 text-[11px] ${loanOn ? "bg-primary text-primary-foreground" : "border border-border"}`}
-              >
-                {loanOn ? "On" : "Off"}
-              </button>
-            </div>
-          </div>
-
-          <div className="rounded-md border border-border p-2">
-            <div className="flex items-center justify-between">
               <Label className="text-[11px] font-semibold">Report photos</Label>
               <div className="flex overflow-hidden rounded-full border border-border text-[11px]">
                 {(["auto", "custom"] as const).map((m) => (
@@ -319,8 +306,9 @@ export function SolarReportDialog({
             )}
           </div>
 
-          <div className="hidden">
+          <div className="rounded-md border border-border p-2">
             <div className="flex items-center justify-between">
+              <Label className="text-[11px] font-semibold">Include loan plan</Label>
               <button
                 type="button"
                 onClick={() => setLoanOn((v) => !v)}
