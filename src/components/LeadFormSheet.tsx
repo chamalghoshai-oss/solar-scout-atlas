@@ -43,6 +43,8 @@ export function LeadFormSheet({
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState("hot");
   const [photos, setPhotos] = useState<PhotoMeta[]>([]);
+  const [latStr, setLatStr] = useState("");
+  const [lngStr, setLngStr] = useState("");
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -55,11 +57,22 @@ export function LeadFormSheet({
       setNotes("");
       setStatus("hot");
       setPhotos([]);
+      setLatStr(draft ? String(draft.lat.toFixed(6)) : "");
+      setLngStr(draft ? String(draft.lng.toFixed(6)) : "");
     }
   }, [open, draft?.lat, draft?.lng]);
 
   if (!draft) return null;
   const isPotential = draft.type === "potential";
+  const latNum = Number(latStr);
+  const lngNum = Number(lngStr);
+  const coordsValid =
+    latStr.trim() !== "" &&
+    lngStr.trim() !== "" &&
+    Number.isFinite(latNum) &&
+    Number.isFinite(lngNum) &&
+    Math.abs(latNum) <= 90 &&
+    Math.abs(lngNum) <= 180;
 
   async function handlePhotos(files: FileList | null) {
     if (!files?.length) return;
@@ -81,6 +94,12 @@ export function LeadFormSheet({
 
   async function save() {
     if (!draft) return;
+    const la = Number(latStr);
+    const ln = Number(lngStr);
+    if (!Number.isFinite(la) || !Number.isFinite(ln) || Math.abs(la) > 90 || Math.abs(ln) > 180) {
+      toast.error("Enter a valid latitude and longitude");
+      return;
+    }
     setBusy(true);
     try {
       const uid = (await supabase.auth.getSession()).data.session?.user?.id;
@@ -89,8 +108,8 @@ export function LeadFormSheet({
         device_id: getDeviceId(),
         user_id: uid,
         type: draft.type,
-        lat: draft.lat,
-        lng: draft.lng,
+        lat: la,
+        lng: ln,
         name: name.trim() || null,
         phone: phone.trim() || null,
         required_kw: kw ? Number(kw) : null,
@@ -119,11 +138,37 @@ export function LeadFormSheet({
           <SheetTitle>{isPotential ? "Mark potential house" : "New lead"}</SheetTitle>
           <p className="flex items-center gap-1 text-xs text-muted-foreground">
             <MapPin className="h-3 w-3" />
-            {draft.lat.toFixed(5)}, {draft.lng.toFixed(5)}
+            Pinned at {draft.lat.toFixed(5)}, {draft.lng.toFixed(5)}
           </p>
         </SheetHeader>
 
         <div className="mt-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="lat">Latitude</Label>
+              <Input
+                id="lat"
+                value={latStr}
+                inputMode="decimal"
+                onChange={(e) => setLatStr(e.target.value)}
+                placeholder="11.25874"
+              />
+            </div>
+            <div>
+              <Label htmlFor="lng">Longitude</Label>
+              <Input
+                id="lng"
+                value={lngStr}
+                inputMode="decimal"
+                onChange={(e) => setLngStr(e.target.value)}
+                placeholder="75.78041"
+              />
+            </div>
+          </div>
+          {!coordsValid && (
+            <p className="-mt-2 text-[11px] text-destructive">Enter valid coordinates (lat ±90, lng ±180).</p>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="name">Name</Label>
@@ -201,7 +246,7 @@ export function LeadFormSheet({
             <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)} disabled={busy}>
               Cancel
             </Button>
-            <Button className="flex-1" onClick={save} disabled={busy}>
+            <Button className="flex-1" onClick={save} disabled={busy || !coordsValid}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
             </Button>
           </div>
