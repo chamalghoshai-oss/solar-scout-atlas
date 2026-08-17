@@ -56,6 +56,9 @@ function LeadDetail() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const [lead, setLead] = useState<Lead | null>(null);
+  const [latStr, setLatStr] = useState("");
+  const [lngStr, setLngStr] = useState("");
+  const [categories, setCategories] = useState<LeadCategory[]>(BUILTIN_CATEGORIES);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -73,6 +76,8 @@ function LeadDetail() {
       if (l) {
         const lead = l as unknown as Lead;
         setLead(lead);
+        setLatStr(lead.lat.toFixed(6));
+        setLngStr(lead.lng.toFixed(6));
         const paths = (lead.photos || []).map((p) => p.path);
         if (paths.length) setSignedUrls(await getSignedUrls(paths));
       }
@@ -85,6 +90,10 @@ function LeadDetail() {
       );
     })();
   }, [id]);
+
+  useEffect(() => {
+    fetchCategories().then(setCategories).catch(() => setCategories(BUILTIN_CATEGORIES));
+  }, []);
 
   const waLink = useMemo(() => {
     if (!lead?.phone || !settings) return null;
@@ -105,6 +114,12 @@ function LeadDetail() {
   }
   async function save() {
     if (!lead) return;
+    const la = Number(latStr);
+    const ln = Number(lngStr);
+    if (!Number.isFinite(la) || !Number.isFinite(ln) || Math.abs(la) > 90 || Math.abs(ln) > 180) {
+      toast.error("Enter a valid latitude and longitude");
+      return;
+    }
     setSaving(true);
     const { error } = await supabase
       .from("leads")
@@ -114,6 +129,9 @@ function LeadDetail() {
         required_kw: lead.required_kw,
         notes: lead.notes,
         status: lead.status,
+        type: lead.type,
+        lat: la,
+        lng: ln,
         visited: lead.visited,
         photos: lead.photos,
         roof_plan: lead.roof_plan,
@@ -121,7 +139,10 @@ function LeadDetail() {
       .eq("id", lead.id);
     setSaving(false);
     if (error) toast.error(error.message);
-    else toast.success("Saved");
+    else {
+      setLead({ ...lead, lat: la, lng: ln });
+      toast.success("Saved");
+    }
   }
   async function remove() {
     if (!lead) return;
