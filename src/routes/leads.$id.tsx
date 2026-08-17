@@ -266,6 +266,46 @@ function LeadDetail() {
           <Textarea value={lead.notes ?? ""} maxLength={1000} rows={3} onChange={(e) => update("notes", e.target.value)} />
         </div>
 
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Latitude</Label>
+            <Input value={latStr} inputMode="decimal" onChange={(e) => setLatStr(e.target.value)} placeholder="11.25874" />
+          </div>
+          <div>
+            <Label>Longitude</Label>
+            <Input value={lngStr} inputMode="decimal" onChange={(e) => setLngStr(e.target.value)} placeholder="75.78041" />
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          onClick={() => {
+            if (!navigator.geolocation) return toast.error("Location not available");
+            navigator.geolocation.getCurrentPosition(
+              (p) => {
+                setLatStr(p.coords.latitude.toFixed(6));
+                setLngStr(p.coords.longitude.toFixed(6));
+                toast.success("Coordinates set from current location");
+              },
+              () => toast.error("Could not get current location"),
+              { enableHighAccuracy: true, timeout: 10000 }
+            );
+          }}
+        >
+          <MapPin className="mr-1 h-4 w-4" /> Use my current location
+        </Button>
+
+        <div>
+          <Label>Category</Label>
+          <Select value={lead.type} onValueChange={(v) => update("type", v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {categories.map((c) => <SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
           <Label htmlFor="visited">Visited</Label>
           <Switch id="visited" checked={lead.visited} onCheckedChange={(v) => update("visited", v)} />
