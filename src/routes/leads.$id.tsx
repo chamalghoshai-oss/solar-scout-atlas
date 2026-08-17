@@ -4,6 +4,7 @@ import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { BUILTIN_CATEGORIES, fetchCategories, type LeadCategory } from "@/lib/lead-categories";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -56,6 +57,9 @@ function LeadDetail() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const [lead, setLead] = useState<Lead | null>(null);
+  const [latStr, setLatStr] = useState("");
+  const [lngStr, setLngStr] = useState("");
+  const [categories, setCategories] = useState<LeadCategory[]>(BUILTIN_CATEGORIES);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -73,6 +77,8 @@ function LeadDetail() {
       if (l) {
         const lead = l as unknown as Lead;
         setLead(lead);
+        setLatStr(lead.lat.toFixed(6));
+        setLngStr(lead.lng.toFixed(6));
         const paths = (lead.photos || []).map((p) => p.path);
         if (paths.length) setSignedUrls(await getSignedUrls(paths));
       }
@@ -85,6 +91,10 @@ function LeadDetail() {
       );
     })();
   }, [id]);
+
+  useEffect(() => {
+    fetchCategories().then(setCategories).catch(() => setCategories(BUILTIN_CATEGORIES));
+  }, []);
 
   const waLink = useMemo(() => {
     if (!lead?.phone || !settings) return null;
@@ -105,6 +115,12 @@ function LeadDetail() {
   }
   async function save() {
     if (!lead) return;
+    const la = Number(latStr);
+    const ln = Number(lngStr);
+    if (!Number.isFinite(la) || !Number.isFinite(ln) || Math.abs(la) > 90 || Math.abs(ln) > 180) {
+      toast.error("Enter a valid latitude and longitude");
+      return;
+    }
     setSaving(true);
     const { error } = await supabase
       .from("leads")
@@ -114,6 +130,9 @@ function LeadDetail() {
         required_kw: lead.required_kw,
         notes: lead.notes,
         status: lead.status,
+        type: lead.type,
+        lat: la,
+        lng: ln,
         visited: lead.visited,
         photos: lead.photos,
         roof_plan: lead.roof_plan,
@@ -121,7 +140,10 @@ function LeadDetail() {
       .eq("id", lead.id);
     setSaving(false);
     if (error) toast.error(error.message);
-    else toast.success("Saved");
+    else {
+      setLead({ ...lead, lat: la, lng: ln });
+      toast.success("Saved");
+    }
   }
   async function remove() {
     if (!lead) return;
@@ -242,6 +264,46 @@ function LeadDetail() {
         <div>
           <Label>Notes</Label>
           <Textarea value={lead.notes ?? ""} maxLength={1000} rows={3} onChange={(e) => update("notes", e.target.value)} />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>Latitude</Label>
+            <Input value={latStr} inputMode="decimal" onChange={(e) => setLatStr(e.target.value)} placeholder="11.25874" />
+          </div>
+          <div>
+            <Label>Longitude</Label>
+            <Input value={lngStr} inputMode="decimal" onChange={(e) => setLngStr(e.target.value)} placeholder="75.78041" />
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          onClick={() => {
+            if (!navigator.geolocation) return toast.error("Location not available");
+            navigator.geolocation.getCurrentPosition(
+              (p) => {
+                setLatStr(p.coords.latitude.toFixed(6));
+                setLngStr(p.coords.longitude.toFixed(6));
+                toast.success("Coordinates set from current location");
+              },
+              () => toast.error("Could not get current location"),
+              { enableHighAccuracy: true, timeout: 10000 }
+            );
+          }}
+        >
+          <MapPin className="mr-1 h-4 w-4" /> Use my current location
+        </Button>
+
+        <div>
+          <Label>Category</Label>
+          <Select value={lead.type} onValueChange={(v) => update("type", v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {categories.map((c) => <SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
