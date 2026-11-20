@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import {
   buildRoofFaces,
+  centroid,
   FOOTING_M,
   gableFaces,
   groupTilt,
@@ -15,6 +16,7 @@ import {
   shadeRamp,
   storeyBaseY,
   storeyRidge,
+  storeyRoofFaces,
   storeyTopY,
   type CadModel,
   type PanelGroup,
@@ -372,6 +374,7 @@ function PrimMesh({
 /** Extra building block (adjacent building or upper storey). */
 function StoreyMesh({ model, storey }: { model: CadModel; storey: Storey }) {
   const base = storeyBaseY(model, storey);
+  const center = useMemo(() => centroid(storey.footprint), [storey.footprint]);
   const sloped = (storey.roofType ?? "flat") === "sloped";
   const walls = useMemo(() => {
     if (storey.footprint.length < 3) return null;
@@ -380,16 +383,17 @@ function StoreyMesh({ model, storey }: { model: CadModel; storey: Storey }) {
       bevelEnabled: false,
     });
     g.rotateX(-Math.PI / 2);
+    g.translate(-center.x, 0, -center.z);
     return g;
-  }, [storey.footprint, storey.wallHeight]);
+  }, [storey.footprint, storey.wallHeight, center]);
 
   const deck = useMemo(() => {
     if (storey.footprint.length < 3 || sloped) return null;
     const g = new THREE.ShapeGeometry(shapeFromPts(storey.footprint));
     g.rotateX(-Math.PI / 2);
-    g.translate(0, storey.wallHeight + 0.02, 0);
+    g.translate(-center.x, storey.wallHeight + 0.02, -center.z);
     return g;
-  }, [storey.footprint, storey.wallHeight, sloped]);
+  }, [storey.footprint, storey.wallHeight, sloped, center]);
 
   const slopedGeo = useMemo(() => {
     if (!sloped || storey.footprint.length < 3) return null;
@@ -404,9 +408,9 @@ function StoreyMesh({ model, storey }: { model: CadModel; storey: Storey }) {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
     g.computeVertexNormals();
-    g.translate(0, -base, 0);
+    g.translate(-center.x, -base, -center.z);
     return g;
-  }, [sloped, storey, model, base]);
+  }, [sloped, storey, model, base, center]);
 
   const parapets = useMemo(() => {
     if (storey.parapetHeight <= 0 || sloped) return [];
@@ -418,18 +422,21 @@ function StoreyMesh({ model, storey }: { model: CadModel; storey: Storey }) {
       const len = Math.hypot(p2.x - p1.x, p2.z - p1.z);
       if (len < 0.05) continue;
       out.push({
-        x: (p1.x + p2.x) / 2,
-        z: (p1.z + p2.z) / 2,
+        x: (p1.x + p2.x) / 2 - center.x,
+        z: (p1.z + p2.z) / 2 - center.z,
         len,
         rot: Math.atan2(p2.x - p1.x, p2.z - p1.z),
       });
     }
     return out;
-  }, [storey.footprint, storey.parapetHeight, sloped]);
+  }, [storey.footprint, storey.parapetHeight, sloped, center]);
 
   if (!walls) return null;
   return (
-    <group position={[0, base, 0]}>
+    <group
+      position={[center.x, base, center.z]}
+      rotation={[(storey.rotationX ?? 0) * Math.PI / 180, (storey.rotationY ?? 0) * Math.PI / 180, 0]}
+    >
       <mesh geometry={walls} castShadow receiveShadow>
         <meshStandardMaterial color="#d7dadc" roughness={0.9} />
       </mesh>
@@ -978,13 +985,23 @@ export function CadScene({
     [heatOn, roofGrid, gridSize.cols, gridSize.rows],
   );
 
+  const scenePoints = [
+    ...model.footprint,
+    ...model.storeys.flatMap((s) => storeyRoofFaces(model, s).flatMap((f) => f.poly)),
+  ];
   const b = useMemo(
-    () => (model.footprint.length >= 3 ? polyBounds(model.footprint) : { minX: -6, maxX: 6, minZ: -5, maxZ: 5 }),
-    [model.footprint],
+    () => (scenePoints.length >= 3 ? polyBounds(scenePoints) : { minX: -6, maxX: 6, minZ: -5, maxZ: 5 }),
+    // Room roof points already include their current X/Y rotations.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [model.footprint, model.storeys],
   );
   const brick = useMemo(() => brickTexture(b.maxX - b.minX, b.maxZ - b.minZ), [b]);
   const span = Math.max(b.maxX - b.minX, b.maxZ - b.minZ, 8) + 10;
-  const top = model.roofType === "flat" ? model.wallHeight + model.parapetHeight : model.ridge.height;
+  const mainTop = model.roofType === "flat" ? model.wallHeight + model.parapetHeight : model.ridge.height;
+  const top = model.storeys.reduce(
+    (highest, s) => storeyRoofFaces(model, s).reduce((roomHighest, f) => f.verts.reduce((y, p) => Math.max(y, p[1]), roomHighest), highest),
+    mainTop,
+  );
   const dayLight = altitude > 0;
 
   const groupPanels = useMemo(() => {

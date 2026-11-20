@@ -67,6 +67,7 @@ export function CadStudio({
   const [siteWidthM, setSiteWidthM] = useState(30);
   const [draw, setDraw] = useState<DrawMode | null>("outline");
   const [outlineN, setOutlineN] = useState<NPt[]>([]);
+  const [ridgeRoomId, setRidgeRoomId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection>(null);
   const [heatOn, setHeatOn] = useState(true);
   const [groundColor, setGroundColor] = useState("#1a472a");
@@ -204,8 +205,17 @@ export function CadStudio({
         },
       }));
       toast.success("Ridge line set");
+    } else if (draw === "room-ridge" && metres.length === 2 && ridgeRoomId) {
+      setModel((m) => ({
+        ...m,
+        storeys: m.storeys.map((s) =>
+          s.id === ridgeRoomId ? { ...s, ridgeLine: { a: metres[0], b: metres[1] } } : s,
+        ),
+      }));
+      toast.success("Room ridge line set");
     }
     setDraw(null);
+    setRidgeRoomId(null);
   }
 
   function addPrim(kind: "block" | "cylinder" | "model") {
@@ -279,8 +289,10 @@ export function CadStudio({
               {draw === "outline"
                 ? "Draw roof outline"
                 : draw === "storey"
-                  ? "Draw extra building / storey"
-                  : "Draw ridge line"}
+                  ? "Draw room outline"
+                  : draw === "room-ridge"
+                    ? "Draw room ridge line"
+                    : "Draw ridge line"}
             </span>
             <div className="flex items-center gap-1.5">
               <Label className="text-[11px] text-muted-foreground">Image width (m)</Label>
@@ -455,6 +467,7 @@ export function CadStudio({
             label="Ridge line"
             onClick={() => {
               if (!hasRoof) return toast.error("Draw the roof outline first");
+              setRidgeRoomId(null);
               setDraw("ridge");
             }}
           />
@@ -469,31 +482,35 @@ export function CadStudio({
           />
           <Tool
             icon={<Building2 className="h-3.5 w-3.5" />}
-            label="Add building / storey"
-            onClick={() => setDraw("storey")}
+            label="Add room"
+            onClick={() => {
+              setRidgeRoomId(null);
+              setDraw("storey");
+            }}
           />
         </div>
         <p className="mt-2 text-[11px] text-muted-foreground">
           Tap an object in the 3D view to select it, then drag it to move. Everything you place casts real shadows.
-          Draw a building block over the main roof to stack a second storey, or beside it for an adjacent building.
+          Add separate rooms on the same floor; draw each room outline, then set its roof, X/Y rotation, and ridge line.
         </p>
       </div>
 
-      {/* Extra buildings / storeys */}
+      {/* Separate rooms on the same floor */}
       {model.storeys.length > 0 && (
         <div className="rounded-xl border border-border bg-card p-3">
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Buildings & storeys
+            Rooms on this floor ({model.storeys.length})
           </div>
           <div className="space-y-2">
             {model.storeys.map((s, i) => (
               <div key={s.id} className="rounded-md border border-border p-2">
                 <div className="mb-1.5 flex items-center justify-between">
-                  <span className="text-[11px] font-semibold">Block {i + 1} · {polyArea(s.footprint).toFixed(1)} m²</span>
+                  <span className="text-[11px] font-semibold">Room {i + 1} · {polyArea(s.footprint).toFixed(1)} m²</span>
                   <Button
                     size="sm"
                     variant="outline"
                     className="h-7"
+                    aria-label={`Delete room ${i + 1}`}
                     onClick={() => setModel((m) => ({ ...m, storeys: m.storeys.filter((x) => x.id !== s.id) }))}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -518,6 +535,16 @@ export function CadStudio({
                       onChange={(v) => updStorey(setModel, s.id, { ridgeHeight: Math.max(0.3, v) })}
                     />
                   )}
+                  <NumField
+                    label="Rotate around X (°)"
+                    value={s.rotationX ?? 0}
+                    onChange={(v) => updStorey(setModel, s.id, { rotationX: v })}
+                  />
+                  <NumField
+                    label="Rotate around Y (°)"
+                    value={s.rotationY ?? 0}
+                    onChange={(v) => updStorey(setModel, s.id, { rotationY: v })}
+                  />
                   <div className="col-span-2 flex items-center justify-between">
                     <Label className="text-[11px] text-muted-foreground">Roof</Label>
                     <div className="flex overflow-hidden rounded-md border border-border text-[11px]">
@@ -533,6 +560,25 @@ export function CadStudio({
                       ))}
                     </div>
                   </div>
+                  {(s.roofType ?? "flat") === "sloped" && (
+                    <div className="col-span-2 flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7"
+                        onClick={() => {
+                          setRidgeRoomId(s.id);
+                          setDraw("room-ridge");
+                        }}
+                      >
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                        {s.ridgeLine ? "Redraw ridge line" : "Draw custom ridge line"}
+                      </Button>
+                      <span className="text-[10px] text-muted-foreground">
+                        {s.ridgeLine ? "Custom position" : "Centered by default"}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -722,7 +768,7 @@ export function CadStudio({
       )}
 
       {/* Heatmap */}
-      <div className="rounded-xl border border-border bg-card p-3">
+          <div className="rounded-xl border border-border bg-card p-3">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Annual shading heatmap

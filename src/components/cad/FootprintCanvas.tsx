@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Undo2, X, Check, Ruler } from "lucide-react";
 import type { Pt } from "@/lib/cad-model";
 
-export type DrawMode = "outline" | "ridge" | "storey";
+export type DrawMode = "outline" | "ridge" | "room-ridge" | "storey";
 
 /** Normalised (0–1) point on the site image. */
 type NPt = { u: number; v: number };
@@ -31,7 +31,8 @@ export function FootprintCanvas({
   const [mpts, setMpts] = useState<NPt[]>([]);
   const ref = useRef<HTMLDivElement>(null);
 
-  const need = mode === "ridge" ? 2 : 3;
+  const ridgeMode = mode === "ridge" || mode === "room-ridge";
+  const need = ridgeMode ? 2 : 3;
 
   useEffect(() => {
     setPts([]);
@@ -62,7 +63,7 @@ export function FootprintCanvas({
     }
     setPts((p) => {
       const next = [...p, { u, v }];
-      if (mode === "ridge" && next.length === 2) {
+      if (ridgeMode && next.length === 2) {
         setTimeout(() => onFinish(next, toMetres(next)), 0);
       }
       return next;
@@ -89,7 +90,7 @@ export function FootprintCanvas({
   // Edge labels for the shape being drawn.
   const edges: { a: NPt; b: NPt }[] = [];
   for (let i = 0; i + 1 < pts.length; i++) edges.push({ a: pts[i], b: pts[i + 1] });
-  if (mode !== "ridge" && pts.length > 2) edges.push({ a: pts[pts.length - 1], b: pts[0] });
+  if (!ridgeMode && pts.length > 2) edges.push({ a: pts[pts.length - 1], b: pts[0] });
 
   const mPairs: { a: NPt; b: NPt }[] = [];
   for (let i = 0; i + 1 < mpts.length; i += 2) mPairs.push({ a: mpts[i], b: mpts[i + 1] });
@@ -178,7 +179,7 @@ export function FootprintCanvas({
             <polygon points={ghost} fill="rgba(56,189,248,0.15)" stroke="#38bdf8" strokeWidth={0.4} vectorEffect="non-scaling-stroke" />
           )}
           {pts.length > 1 &&
-            (mode === "ridge" ? (
+            (ridgeMode ? (
               <polyline points={poly} fill="none" stroke="#f97316" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
             ) : (
               <polygon points={poly} fill="rgba(249,115,22,0.2)" stroke="#f97316" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
@@ -226,10 +227,10 @@ export function FootprintCanvas({
         <div className="pointer-events-none absolute left-2 top-2 rounded bg-background/85 px-2 py-1 text-[11px] font-medium">
           {measuring
             ? `Ruler: tap two points to measure (${mpts.length % 2 === 0 ? "start" : "end"})`
-            : mode === "ridge"
+            : ridgeMode
             ? `Click the ridge start and end (${pts.length}/2)`
             : mode === "storey"
-              ? `Click corners of the extra building / upper storey · double-click or Enter to close (${pts.length})`
+              ? `Click corners of the room outline · double-click or Enter to close (${pts.length})`
               : `Click roof corners · double-click or Enter to close (${pts.length})`}
         </div>
       </div>

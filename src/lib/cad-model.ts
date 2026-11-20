@@ -83,6 +83,11 @@ export type Storey = {
   roofType?: RoofType;
   /** ridge apex height above the storey base when roofType === "sloped" */
   ridgeHeight?: number;
+  /** Optional custom ridge endpoints in the same plan coordinates as footprint. */
+  ridgeLine?: { a: Pt; b: Pt };
+  /** Room rotation around its local X and Y axes, in degrees. */
+  rotationX?: number;
+  rotationY?: number;
 };
 
 /** Fixed panel tilt: always 11° facing south. */
@@ -252,9 +257,32 @@ export function storeyRidge(m: CadModel, s: Storey): Ridge {
   const dz = b.maxZ - b.minZ;
   const top = storeyTopY(m, s);
   const height = top + Math.max(0.3, s.ridgeHeight ?? 1.8);
+  if (s.ridgeLine) return { ...s.ridgeLine, height };
   return dx >= dz
     ? { a: { x: b.minX + dx * 0.2, z: c.z }, b: { x: b.maxX - dx * 0.2, z: c.z }, height }
     : { a: { x: c.x, z: b.minZ + dz * 0.2 }, b: { x: c.x, z: b.maxZ - dz * 0.2 }, height };
+}
+
+/** Rotate a storey point around its footprint centre and base, matching the 3D room controls. */
+export function transformStoreyPoint(s: Storey, p: Vec3, baseY: number): Vec3 {
+  const c = centroid(s.footprint);
+  const rx = ((s.rotationX ?? 0) * Math.PI) / 180;
+  const ry = ((s.rotationY ?? 0) * Math.PI) / 180;
+  const cosX = Math.cos(rx);
+  const sinX = Math.sin(rx);
+  const cosY = Math.cos(ry);
+  const sinY = Math.sin(ry);
+  const x = p[0] - c.x;
+  const y = p[1] - baseY;
+  const z = p[2] - c.z;
+  const xRot = x;
+  const yRot = y * cosX - z * sinX;
+  const zRot = y * sinX + z * cosX;
+  return [
+    c.x + xRot * cosY + zRot * sinY,
+    baseY + yRot,
+    c.z - xRot * sinY + zRot * cosY,
+  ];
 }
 
 /** Gable roof faces from a footprint, eave height and ridge line. */
@@ -288,12 +316,15 @@ export function gableFaces(fp: Pt[], eaveY: number, ridge: Ridge): RoofFace[] {
 /** Roof faces of a single extra building / storey. */
 export function storeyRoofFaces(m: CadModel, s: Storey): RoofFace[] {
   if (s.footprint.length < 3) return [];
+  const base = storeyBaseY(m, s);
   const top = storeyTopY(m, s);
-  if ((s.roofType ?? "flat") === "sloped") {
-    return gableFaces(s.footprint, top, storeyRidge(m, s));
-  }
-  const f = faceFromVerts(s.footprint.map((p) => [p.x, top, p.z] as Vec3));
-  return f ? [f] : [];
+  const faces = (s.roofType ?? "flat") === "sloped"
+    ? gableFaces(s.footprint, top, storeyRidge(m, s))
+    : [faceFromVerts(s.footprint.map((p) => [p.x, top, p.z] as Vec3))].filter((f): f is RoofFace => f !== null);
+  return faces.flatMap((face) => {
+    const transformed = faceFromVerts(face.verts.map((p) => transformStoreyPoint(s, p, base)));
+    return transformed ? [transformed] : [];
+  });
 }
 
 /** Roof faces for the current model. Flat = one horizontal face. */
@@ -432,17 +463,24 @@ export type Caster =
 
 /** Ray/OBB (vertical axis aligned, yaw-rotated) */
 function hitOBB(o: Vec3, dir: Vec3, c: Extract<Caster, { kind: "obb" }>): boolean {
-  const a = (-c.rotY * Math.PI) / 180;
-  const ca = Math.cos(a);
-  const sa = Math.sin(a);
-  const ox = (o[0] - c.cx) * ca - (o[2] - c.cz) * sa;
-  const oz = (o[0] - c.cx) * sa + (o[2] - c.cz) * ca;
-  const dx = dir[0] * ca - dir[2] * sa;
-  const dz = dir[0] * sa + dir[2] * ca;
-  const lo = [-c.w / 2, c.minY, -c.d / 2];
-  const hi = [c.w / 2, c.maxY, c.d / 2];
-  const org = [ox, o[1], oz];
-  const d = [dx, dir[1], dz];
+  const centerY = c.centerY ?? (c.minY + c.maxY) / 2;
+  const ay = (-c.rotY * Math.PI) / 180;
+  const ax = (-(c.rotX ?? 0) * Math.PI) / 180;
+  const cy = Math.cos(ay);
+  const sy = Math.sin(ay);
+  const cx = Math.cos(ax);
+  const sx = Math.sin(ax);
+  const toLocal = (x: number, y: number, z: number): [number, number, number] => {
+    const yawX = x * cy - z * sy;
+    const yawZ = x * sy + z * cy;
+    return [yawX, y * cx - yawZ * sx, y * sx + yawZ * cx];
+  };
+  const org = toLocal(o[0] - c.cx, o[1] - centerY, o[2] - c.cz);
+  const d = toLocal(dir[0], dir[1], dir[2]);
+  const localMinY = c.centerY == null ? c.minY - centerY : c.minY;
+  const localMaxY = c.centerY == null ? c.maxY - centerY : c.maxY;
+  const lo = [-c.w / 2, localMinY, -c.d / 2];
+  const hi = [c.w / 2, localMaxY, c.d / 2];
   let tmin = 0;
   let tmax = 1e6;
   for (let i = 0; i < 3; i++) {
@@ -537,15 +575,19 @@ export function buildCasters(m: CadModel): Caster[] {
     if ((s.roofType ?? "flat") === "sloped") {
       const rg = storeyRidge(m, s);
       const len = Math.max(0.5, Math.hypot(rg.b.x - rg.a.x, rg.b.z - rg.a.z));
+      const ridgeCenter = transformStoreyPoint(s, [(rg.a.x + rg.b.x) / 2, (base + s.wallHeight + rg.height) / 2, (rg.a.z + rg.b.z) / 2], base);
+      const roofThickness = Math.max(0.2, rg.height - (base + s.wallHeight));
       out.push({
         kind: "obb",
-        cx: (rg.a.x + rg.b.x) / 2,
-        cz: (rg.a.z + rg.b.z) / 2,
+        cx: ridgeCenter[0],
+        cz: ridgeCenter[2],
         w: 0.3,
         d: len,
-        minY: base + s.wallHeight,
-        maxY: rg.height,
-        rotY: (Math.atan2(rg.b.x - rg.a.x, rg.b.z - rg.a.z) * 180) / Math.PI,
+        minY: -roofThickness / 2,
+        maxY: roofThickness / 2,
+        centerY: ridgeCenter[1],
+        rotX: s.rotationX ?? 0,
+        rotY: (s.rotationY ?? 0) + (Math.atan2(rg.b.x - rg.a.x, rg.b.z - rg.a.z) * 180) / Math.PI,
       });
     }
     for (let i = 0; i < s.footprint.length; i++) {
@@ -553,15 +595,23 @@ export function buildCasters(m: CadModel): Caster[] {
       const p2 = s.footprint[(i + 1) % s.footprint.length];
       const len = Math.hypot(p2.x - p1.x, p2.z - p1.z);
       if (len < 0.05) continue;
+      const wallHeight = Math.max(0.1, top - base);
+      const wallCenter = transformStoreyPoint(
+        s,
+        [(p1.x + p2.x) / 2, base + wallHeight / 2, (p1.z + p2.z) / 2],
+        base,
+      );
       out.push({
         kind: "obb",
-        cx: (p1.x + p2.x) / 2,
-        cz: (p1.z + p2.z) / 2,
+        cx: wallCenter[0],
+        cz: wallCenter[2],
         w: 0.2,
         d: len,
-        minY: base,
-        maxY: top,
-        rotY: (Math.atan2(p2.x - p1.x, p2.z - p1.z) * 180) / Math.PI,
+        minY: -wallHeight / 2,
+        maxY: wallHeight / 2,
+        centerY: wallCenter[1],
+        rotX: s.rotationX ?? 0,
+        rotY: (s.rotationY ?? 0) + (Math.atan2(p2.x - p1.x, p2.z - p1.z) * 180) / Math.PI,
       });
     }
   }
@@ -658,7 +708,10 @@ export function roofShadeGrid(
   cols: number,
   rows: number,
 ): { grid: Float32Array; bounds: ReturnType<typeof polyBounds> } | null {
-  const all = [...m.footprint, ...m.storeys.flatMap((s) => s.footprint)];
+  const all = [
+    ...m.footprint,
+    ...m.storeys.flatMap((s) => storeyRoofFaces(m, s).flatMap((f) => f.poly)),
+  ];
   if (all.length < 3) return null;
   const bounds = polyBounds(all);
   const faces = buildRoofFaces(m);
